@@ -211,6 +211,8 @@ public:
  }
  \endcode
 */
+
+//このクラスが怪しいはず
 class FilterEngine
 {
 public:

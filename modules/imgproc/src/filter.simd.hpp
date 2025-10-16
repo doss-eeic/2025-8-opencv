@@ -133,9 +133,11 @@ int FilterEngine__start(FilterEngine& this_, const Size &_wholeSize, const Size 
             if (this_.isSeparable())
                 (*this_.rowFilter)(&this_.srcRow[0], dst, this_.maxWidth, cn);
         }
-
+        //ここでリングバッファが作られているので、ここが怪しい
         int maxBufStep = bufElemSize*(int)alignSize(this_.maxWidth +
             (!this_.isSeparable() ? this_.ksize.width - 1 : 0), VEC_ALIGN);
+
+        //resizeによって、リングバッファのサイズが変更されたことを確認した。
         this_.ringBuf.resize(maxBufStep*this_.rows.size()+VEC_ALIGN);
     }
 

@@ -211,21 +211,21 @@ void VideoWriter_IntelMFX::write(cv::InputArray input)
     write_one(input);
 }
 
-bool VideoWriter_IntelMFX::write_one(cv::InputArray bgr)
+bool VideoWriter_IntelMFX::write_one(cv::InputArray rgb)
 {
     mfxStatus res;
     mfxFrameSurface1 *workSurface = 0;
     mfxSyncPoint sync;
 
-    if (!bgr.empty() && (bgr.dims() != 2 || bgr.type() != CV_8UC3 || bgr.size() != frameSize))
+    if (!rgb.empty() && (rgb.dims() != 2 || rgb.type() != CV_8UC3 || rgb.size() != frameSize))
     {
         MSG(cerr << "MFX: invalid frame passed to encoder: "
-            << "dims/depth/cn=" << bgr.dims() << "/" << bgr.depth() << "/" << bgr.channels()
-            << ", size=" << bgr.size() << endl);
+            << "dims/depth/cn=" << rgb.dims() << "/" << rgb.depth() << "/" << rgb.channels()
+            << ", size=" << rgb.size() << endl);
         return false;
 
     }
-    if (!bgr.empty())
+    if (!rgb.empty())
     {
         workSurface = pool->getFreeSurface();
         if (!workSurface)
@@ -234,7 +234,7 @@ bool VideoWriter_IntelMFX::write_one(cv::InputArray bgr)
             MSG(cerr << "MFX: Failed to get free surface" << endl);
             return false;
         }
-        Mat src = bgr.getMat();
+        Mat src = rgb.getMat();
         hal::cvtBGRtoTwoPlaneYUV(src.data, src.step,
                                  workSurface->Data.Y, workSurface->Data.UV, workSurface->Data.Pitch,
                                  workSurface->Info.CropW, workSurface->Info.CropH,

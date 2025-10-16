@@ -1746,10 +1746,11 @@ bool CvCapture_FFMPEG::retrieveFrame(int flag, unsigned char** data, int* step, 
         << ", primaries: " << av_color_primaries_name(sw_picture->color_primaries)
         << ", transfer: " << av_color_transfer_name(sw_picture->color_trc)
     );
-    const AVPixelFormat result_format = convertRGB ? AV_PIX_FMT_BGR24 : (AVPixelFormat)sw_picture->format;
+    const AVPixelFormat result_format = AV_PIX_FMT_RGB24;
     switch (result_format)
     {
     case AV_PIX_FMT_BGR24: *depth = CV_8U; *cn = 3; break;
+    case AV_PIX_FMT_RGB24: *depth = CV_8U; *cn = 3; break;
     case AV_PIX_FMT_GRAY8: *depth = CV_8U; *cn = 1; break;
     case AV_PIX_FMT_GRAY16LE: *depth = CV_16U; *cn = 1; break;
     default:

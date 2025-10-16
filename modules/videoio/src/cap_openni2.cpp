@@ -1017,7 +1017,7 @@ inline void getBGRImageFromMetaData( const openni::VideoFrameRef& imageMetaData,
    bufferImage.create(imageMetaData.getHeight(), imageMetaData.getWidth(), CV_8UC3);
    bufferImage.data = (uchar*)imageMetaData.getData();
 
-   cv::cvtColor(bufferImage, bgrImage, cv::COLOR_RGB2BGR);
+   bufferImage.copyTo(bgrImage);
 }
 
 inline void getGrayImageFromMetaData(const openni::VideoFrameRef& imageMetaData, cv::Mat& grayImage)

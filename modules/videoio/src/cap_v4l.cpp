@@ -1437,19 +1437,19 @@ void CvCaptureCAM_V4L::convertToRgb(const Buffer &currentBuffer)
         return;
     case V4L2_PIX_FMT_YVU420:
         cv::cvtColor(cv::Mat(imageSize.height * 3 / 2, imageSize.width, CV_8U, start), frame,
-                     COLOR_YUV2BGR_YV12);
+                     COLOR_YUV2RGB_YV12);
         return;
     case V4L2_PIX_FMT_YUV420:
         cv::cvtColor(cv::Mat(imageSize.height * 3 / 2, imageSize.width, CV_8U, start), frame,
-                     COLOR_YUV2BGR_IYUV);
+                     COLOR_YUV2RGB_IYUV);
         return;
     case V4L2_PIX_FMT_NV12:
         cv::cvtColor(cv::Mat(imageSize.height * 3 / 2, imageSize.width, CV_8U, start), frame,
-                     COLOR_YUV2BGR_NV12);
+                     COLOR_YUV2RGB_NV12);
         return;
     case V4L2_PIX_FMT_NV21:
         cv::cvtColor(cv::Mat(imageSize.height * 3 / 2, imageSize.width, CV_8U, start), frame,
-                     COLOR_YUV2BGR_NV21);
+                     COLOR_YUV2RGB_NV21);
         return;
 #ifdef HAVE_JPEG
     case V4L2_PIX_FMT_MJPEG:
@@ -1459,13 +1459,14 @@ void CvCaptureCAM_V4L::convertToRgb(const Buffer &currentBuffer)
         return;
 #endif
     case V4L2_PIX_FMT_YUYV:
-        cv::cvtColor(cv::Mat(imageSize, CV_8UC2, start), frame, COLOR_YUV2BGR_YUYV);
+        cv::cvtColor(cv::Mat(imageSize, CV_8UC2, start), frame, COLOR_YUV2RGB_YUYV);
         return;
     case V4L2_PIX_FMT_UYVY:
-        cv::cvtColor(cv::Mat(imageSize, CV_8UC2, start), frame, COLOR_YUV2BGR_UYVY);
+        cv::cvtColor(cv::Mat(imageSize, CV_8UC2, start), frame, COLOR_YUV2RGB_UYVY);
         return;
     case V4L2_PIX_FMT_RGB24:
-        cv::cvtColor(cv::Mat(imageSize, CV_8UC3, start), frame, COLOR_RGB2BGR);
+        // RGB24 is already RGB format, just copy
+        Mat(1, currentBuffer.bytesused, CV_8U, start).reshape(frame.channels(), frame.rows).copyTo(frame);
         return;
     case V4L2_PIX_FMT_Y16:
     {
@@ -1474,7 +1475,7 @@ void CvCaptureCAM_V4L::convertToRgb(const Buffer &currentBuffer)
         // Note: 10-bits precision is not supported
         cv::Mat temp(imageSize, CV_8UC1, buffers[MAX_V4L_BUFFERS].memories[MEMORY_RGB].start);
         cv::extractChannel(cv::Mat(imageSize, CV_8UC2, start), temp, 1);  // 1 - second channel
-        cv::cvtColor(temp, frame, COLOR_GRAY2BGR);
+        cv::cvtColor(temp, frame, COLOR_GRAY2RGB);
         return;
     }
     case V4L2_PIX_FMT_Y16_BE:
@@ -1484,21 +1485,21 @@ void CvCaptureCAM_V4L::convertToRgb(const Buffer &currentBuffer)
         // Note: 10-bits precision is not supported
         cv::Mat temp(imageSize, CV_8UC1, buffers[MAX_V4L_BUFFERS].memories[MEMORY_RGB].start);
         cv::extractChannel(cv::Mat(imageSize, CV_8UC2, start), temp, 0);  // 0 - first channel
-        cv::cvtColor(temp, frame, COLOR_GRAY2BGR);
+        cv::cvtColor(temp, frame, COLOR_GRAY2RGB);
         return;
     }
     case V4L2_PIX_FMT_Y12:
     {
         cv::Mat temp(imageSize, CV_8UC1, buffers[MAX_V4L_BUFFERS].memories[MEMORY_RGB].start);
         cv::Mat(imageSize, CV_16UC1, start).convertTo(temp, CV_8U, 1.0 / 16);
-        cv::cvtColor(temp, frame, COLOR_GRAY2BGR);
+        cv::cvtColor(temp, frame, COLOR_GRAY2RGB);
         return;
     }
     case V4L2_PIX_FMT_Y10:
     {
         cv::Mat temp(imageSize, CV_8UC1, buffers[MAX_V4L_BUFFERS].memories[MEMORY_RGB].start);
         cv::Mat(imageSize, CV_16UC1, start).convertTo(temp, CV_8U, 1.0 / 4);
-        cv::cvtColor(temp, frame, COLOR_GRAY2BGR);
+        cv::cvtColor(temp, frame, COLOR_GRAY2RGB);
         return;
     }
     case V4L2_PIX_FMT_SN9C10X:
@@ -1508,39 +1509,42 @@ void CvCaptureCAM_V4L::convertToRgb(const Buffer &currentBuffer)
                 start, (unsigned char*)buffers[MAX_V4L_BUFFERS].memories[MEMORY_RGB].start);
 
         cv::Mat cv_buf(imageSize, CV_8UC1, buffers[MAX_V4L_BUFFERS].memories[MEMORY_RGB].start);
-        cv::cvtColor(cv_buf, frame, COLOR_BayerRG2BGR);
+        cv::cvtColor(cv_buf, frame, COLOR_BayerRG2RGB);
         return;
     }
     case V4L2_PIX_FMT_SRGGB8:
     {
-        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_BayerBG2BGR);
+        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_BayerBG2RGB);
         return;
     }
     case V4L2_PIX_FMT_SBGGR8:
     {
-        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_BayerRG2BGR);
+        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_BayerRG2RGB);
         return;
     }
     case V4L2_PIX_FMT_SGBRG8:
     {
-        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_BayerGR2BGR);
+        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_BayerGR2RGB);
         return;
     }
     case V4L2_PIX_FMT_SGRBG8:
     {
-        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_BayerGB2BGR);
+        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_BayerGB2RGB);
         return;
     }
     case V4L2_PIX_FMT_GREY:
-        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_GRAY2BGR);
+        cv::cvtColor(cv::Mat(imageSize, CV_8UC1, start), frame, COLOR_GRAY2RGB);
         return;
     case V4L2_PIX_FMT_XBGR32:
     case V4L2_PIX_FMT_ABGR32:
-        cv::cvtColor(cv::Mat(imageSize, CV_8UC4, start), frame, COLOR_BGRA2BGR);
+        cv::cvtColor(cv::Mat(imageSize, CV_8UC4, start), frame, COLOR_BGRA2RGB);
         return;
     case V4L2_PIX_FMT_BGR24:
     default:
-        Mat(1, currentBuffer.bytesused, CV_8U, start).reshape(frame.channels(), frame.rows).copyTo(frame);
+        {
+            Mat temp(1, currentBuffer.bytesused, CV_8U, start).reshape(frame.channels(), frame.rows);
+            cv::cvtColor(temp, frame, COLOR_BGR2RGB);
+        }
         return;
     }
 }
@@ -2108,9 +2112,9 @@ bool CvCaptureCAM_V4L::retrieveFrame(int, OutputArray ret)
 
     /* Now get what has already been captured as a IplImage return */
     const Buffer &currentBuffer = buffers[bufferIndex];
-    if (convert_rgb) {
-        convertToRgb(currentBuffer);
-    } else {
+    // Always convert to RGB
+    convertToRgb(currentBuffer);
+    if (false) {
         // for mjpeg streams the size might change in between, so we have to change the header
         // We didn't allocate memory when not convert_rgb, but we have to recreate the header
         CV_LOG_DEBUG(NULL, "VIDEOIO(V4L2:" << deviceName << "): buffer input size=" << currentBuffer.bytesused);

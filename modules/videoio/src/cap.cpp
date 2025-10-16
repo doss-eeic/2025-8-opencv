@@ -557,7 +557,7 @@ bool VideoCapture::read(OutputArray image)
 
     if (grab())
     {
-        retrieve(image);
+        retrieve(image, CAP_OBSENSOR_RGB_IMAGE);
     } else {
         image.release();
     }
@@ -570,7 +570,7 @@ VideoCapture& VideoCapture::operator >> (Mat& image)
     // FIXIT grab/retrieve methods() should work too
     if (grab())
     {
-        if (retrieve(image))
+        if (retrieve(image, CAP_OBSENSOR_RGB_IMAGE))
         {
             std::lock_guard<std::mutex> lock(VideoioBridge::getInstance().inputBufferMutex);
             VideoioBridge& bridge = VideoioBridge::getInstance();

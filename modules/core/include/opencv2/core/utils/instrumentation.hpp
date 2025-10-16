@@ -44,7 +44,7 @@ namespace instr
 
 enum TYPE
 {
-    TYPE_GENERAL = 0,   // OpenCV API function, e.g. exported function
+    TYPE_GENERAL = 2,   // OpenCV API function, e.g. exported function
     TYPE_MARKER,        // Information marker
     TYPE_WRAPPER,       // Wrapper function for implementation
     TYPE_FUN,           // Simple function call

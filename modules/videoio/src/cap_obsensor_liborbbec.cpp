@@ -219,8 +219,28 @@ bool VideoCapture_obsensor::retrieveFrame(int outputType, cv::OutputArray frame)
                 CV_LOG_WARNING(NULL, "Failed to decode color frame");
                 return false;
             }
-            bgrMat.copyTo(frame);
+            Mat rgbMat;
+            cvtColor(bgrMat, rgbMat, COLOR_BGR2RGB);
+            rgbMat.copyTo(frame);
             return true;
+        }
+        break;
+    case CAP_OBSENSOR_RGB_IMAGE:
+        if(grabbedColorFrame != nullptr){
+            auto format = grabbedColorFrame->format();
+            if(format != OB_FORMAT_MJPEG){
+                CV_LOG_WARNING(NULL, "Unsupported color frame format");
+                return false;
+            }
+            auto mjpgMat = Mat(1, grabbedColorFrame->dataSize() , CV_8UC1, grabbedColorFrame->data()).clone();
+            auto rgbMat = imdecode(mjpgMat, IMREAD_COLOR);
+            if(rgbMat.empty()){
+                CV_LOG_WARNING(NULL, "Failed to decode color frame");
+                return false;
+            }
+            rgbMat.copyTo(frame);
+            return true;
+            }
         }
         break;
     case CAP_OBSENSOR_DEPTH_MAP:

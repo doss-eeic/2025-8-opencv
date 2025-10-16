@@ -696,7 +696,8 @@ enum { CAP_PROP_IMAGES_BASE = 18000,
 enum VideoCaptureOBSensorDataType{
     CAP_OBSENSOR_DEPTH_MAP = 0, //!< Depth values in mm (CV_16UC1)
     CAP_OBSENSOR_BGR_IMAGE = 1, //!< Data given from BGR stream generator
-    CAP_OBSENSOR_IR_IMAGE = 2   //!< Data given from IR stream generator(CV_16UC1)
+    CAP_OBSENSOR_RGB_IMAGE = 2, //!< Data given from RGB stream generator
+    CAP_OBSENSOR_IR_IMAGE = 3   //!< Data given from IR stream generator(CV_16UC1)
 };
 
 //! OBSENSOR stream generator
@@ -965,7 +966,7 @@ public:
     capturing structure. It is not allowed to modify or release the image! You can copy the frame using
     cvCloneImage and then do whatever you want with the copy.
      */
-    CV_WRAP virtual bool retrieve(OutputArray image, int flag = 0);
+    CV_WRAP virtual bool retrieve(OutputArray image, int flag = CAP_OBSENSOR_RGB_IMAGE);
 
     /** @brief Stream operator to read the next video frame.
     @sa read()

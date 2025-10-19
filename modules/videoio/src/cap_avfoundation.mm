@@ -68,8 +68,8 @@
 {
     int newFrame;
     CVImageBufferRef  mCurrentImageBuffer;
-    cv::Mat bgr_image;
-    cv::Mat bgr_image_r90;
+    cv::Mat rgb_image;
+    cv::Mat rgb_image_r90;
     size_t currSize;
 }
 
@@ -647,8 +647,8 @@ bool CvCaptureCAM::setProperty(int property_id, double value) {
 
 
 -(void)dealloc {
-    bgr_image.release();
-    bgr_image_r90.release();
+    rgb_image.release();
+    rgb_image_r90.release();
     [super dealloc];
 }
 
@@ -696,22 +696,22 @@ fromConnection:(AVCaptureConnection *)connection{
 
     bool res = false;
     if (rowBytes != 0 && pixelFormat == kCVPixelFormatType_32BGRA) {
-        bgr_image.create(sz, CV_8UC3);
+        rgb_image.create(sz, CV_8UC3);
         cv::Mat devImage(sz, CV_8UC4, baseaddress, rowBytes);
-        cv::cvtColor(devImage, bgr_image, cv::COLOR_BGRA2BGR);
+        cv::cvtColor(devImage, rgb_image, cv::COLOR_BGRA2RGB);
 
         // image taken from the buffer is incorrected rotated. I'm using cvTranspose + cvFlip.
         // There should be an option in iOS API to rotate the buffer output orientation.
         // iOS provides hardware accelerated rotation through AVCaptureConnection class
         // I can't get it work.
-        bgr_image_r90.create(sz, CV_8UC3);
-        cv::transpose(bgr_image, bgr_image_r90);
-        cv::flip(bgr_image_r90, bgr_image_r90, 1);
+        rgb_image_r90.create(sz, CV_8UC3);
+        cv::transpose(rgb_image, rgb_image_r90);
+        cv::flip(rgb_image_r90, rgb_image_r90, 1);
         res = true;
     } else {
         fprintf(stderr, "OpenCV: rowBytes == 0 or unknown pixel format 0x%08X\n", pixelFormat);
-        bgr_image.create(cv::Size(0, 0), bgr_image.type());
-        bgr_image_r90.create(cv::Size(0, 0), bgr_image_r90.type());
+        rgb_image.create(cv::Size(0, 0), rgb_image.type());
+        rgb_image_r90.create(cv::Size(0, 0), rgb_image_r90.type());
     }
 
     CVPixelBufferUnlockBaseAddress(pixels, 0);
@@ -721,7 +721,7 @@ fromConnection:(AVCaptureConnection *)connection{
 }
 
 -(cv::Mat) getImage {
-    return bgr_image_r90;
+    return rgb_image_r90;
 }
 
 @end
@@ -744,7 +744,7 @@ CvCaptureFile::CvCaptureFile(const char* filename) {
     mAssetReader = nil;
     mTrackOutput = nil;
     currSize = 0;
-    mMode = CV_CAP_MODE_BGR;
+    mMode = CV_CAP_MODE_RGB;
     mFormat = CV_8UC3;
     mCurrentSampleBuffer = NULL;
     mGrabbedPixels = NULL;

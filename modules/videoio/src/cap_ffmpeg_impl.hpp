@@ -1867,6 +1867,24 @@ bool CvCapture_FFMPEG::retrieveFrame(int flag, unsigned char** data, int* step, 
             );
 #endif
 
+    // RGB24形式で出力されたデータを、OpenCVのMatオブジェクトでRGBとして解釈するために
+    // データの順序を調整（RGB -> BGR の順序で格納して、pixel[0]がRになるように）
+    if (result_format == AV_PIX_FMT_RGB24) {
+        uint8_t* data_ptr = rgb_picture.data[0];
+        int total_pixels = frame.width * frame.height;
+        for (int i = 0; i < total_pixels; i++) {
+            // RGB24形式のデータをBGR順序で格納（pixel[0]がRになるように）
+            uint8_t r = data_ptr[i * 3];     // RGB24のR
+            uint8_t g = data_ptr[i * 3 + 1]; // RGB24のG
+            uint8_t b = data_ptr[i * 3 + 2]; // RGB24のB
+            
+            // RGB順序で格納（center_pixel[0]=R, center_pixel[1]=G, center_pixel[2]=B）
+            data_ptr[i * 3] = r;     // R
+            data_ptr[i * 3 + 1] = g; // G
+            data_ptr[i * 3 + 2] = b; // B
+        }
+    }
+
     *data = frame.data;
     *step = frame.step;
     *width = frame.width;

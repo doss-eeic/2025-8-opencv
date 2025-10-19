@@ -265,7 +265,7 @@ bool AvifDecoder::readData(Mat &img) {
     is_first_image_ = false;
   }
 
-  if (CopyToMat(decoder_->image, channels_, m_use_rgb, &read_img) != AVIF_RESULT_OK) {
+  if (CopyToMat(decoder_->image, channels_, m_use_bgr, &read_img) != AVIF_RESULT_OK) {
     CV_Error(Error::StsInternal, "Cannot convert from AVIF to Mat");
     return false;
   }

@@ -268,6 +268,8 @@ void icvCvt_BGR2RGB_16u_C3R( const ushort* bgr, int bgr_step,
 }
 
 
+
+
 typedef unsigned short ushort;
 
 void icvCvt_BGR5552Gray_8u_C2C1R( const uchar* bgr555, int bgr555_step,

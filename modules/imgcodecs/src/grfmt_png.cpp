@@ -616,7 +616,7 @@ bool  PngDecoder::readData( Mat& img )
                 png_set_gray_1_2_4_to_8( png_ptr );
 #endif
 
-            if( (m_color_type & PNG_COLOR_MASK_COLOR) && color && !m_use_rgb)
+            if( (m_color_type & PNG_COLOR_MASK_COLOR) && color && !m_use_bgr)
                 png_set_bgr( m_png_ptr ); // convert RGB to BGR
             else if( color )
                 png_set_gray_to_rgb( m_png_ptr ); // Gray->RGB
@@ -849,7 +849,7 @@ bool PngDecoder::processing_start(void* frame_ptr, const Mat& img)
     png_process_data(m_png_ptr, m_info_ptr, header, 8);
     png_process_data(m_png_ptr, m_info_ptr, m_chunkIHDR.p.data(), m_chunkIHDR.p.size());
 
-    if ((m_color_type & PNG_COLOR_MASK_COLOR) && img.channels() > 1 && !m_use_rgb)
+    if ((m_color_type & PNG_COLOR_MASK_COLOR) && img.channels() > 1 && !m_use_bgr)
         png_set_bgr(m_png_ptr); // convert RGB to BGR
     else if (img.channels() > 1)
         png_set_gray_to_rgb(m_png_ptr); // Gray->RGB

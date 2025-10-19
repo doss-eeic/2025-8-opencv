@@ -54,7 +54,7 @@ BaseImageDecoder::BaseImageDecoder()
     m_type = -1;
     m_buf_supported = false;
     m_scale_denom = 1;
-    m_use_rgb = false;
+    m_use_bgr = false;
     m_frame_count = 1;
     m_read_options = 0;
     m_metadata.resize(IMAGE_METADATA_MAX + 1);
@@ -136,7 +136,7 @@ int BaseImageDecoder::setReadOptions(int read_options)
 
 void BaseImageDecoder::setRGB(bool useRGB)
 {
-    m_use_rgb = useRGB;
+    m_use_bgr = !useRGB;
 }
 
 ImageDecoder BaseImageDecoder::newDecoder() const

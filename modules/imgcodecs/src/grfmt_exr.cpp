@@ -265,9 +265,9 @@ bool  ExrDecoder::readData( Mat& img )
     // See https://github.com/opencv/opencv/issues/26705
     // If ALGO_HINT_ACCURATE is set, read BGR and swap to RGB.
     // If ALGO_HINT_APPROX is set,   read RGB directly.
-    bool doReadRGB = m_use_rgb;
+    bool doReadRGB = m_use_bgr;
     bool doPostColorSwap = false; // After decoding, swap BGR to RGB
-    if(m_use_rgb && (getDefaultAlgorithmHint() == ALGO_HINT_ACCURATE) )
+    if(m_use_bgr && (getDefaultAlgorithmHint() == ALGO_HINT_ACCURATE) )
     {
         doReadRGB = false;
         doPostColorSwap = true;

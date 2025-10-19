@@ -186,13 +186,13 @@ bool GifDecoder::readData(Mat &img) {
     lastImage = img_;
     if (!img.empty()) {
         if (img.channels() == 3){
-            if (m_use_rgb) {
+            if (m_use_bgr) {
                 cvtColor(img_, img, COLOR_BGRA2RGB);
             } else {
                 cvtColor(img_, img, COLOR_BGRA2BGR);
             }
         } else if (img.channels() == 4){
-            if (m_use_rgb) {
+            if (m_use_bgr) {
                 cvtColor(img_, img, COLOR_BGRA2RGBA);
             } else {
                 img_.copyTo(img);

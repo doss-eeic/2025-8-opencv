@@ -139,7 +139,7 @@ bool PFMDecoder::readData(Mat& mat)
     }
   }
 
-  if (buffer.channels() == 3 && !m_use_rgb) {
+  if (buffer.channels() == 3 && !m_use_bgr) {
     cv::cvtColor(buffer, buffer, cv::COLOR_BGR2RGB);
   }
 

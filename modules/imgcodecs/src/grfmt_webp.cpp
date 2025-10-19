@@ -159,7 +159,7 @@ bool WebPDecoder::readHeader()
         if (!WebPAnimDecoderOptionsInit(&dec_options))
             CV_Error(Error::StsInternal, "Failed to initialize animated WebP decoding options");
 
-        dec_options.color_mode = m_use_rgb ? MODE_RGBA : MODE_BGRA;
+        dec_options.color_mode = m_use_bgr ? MODE_RGBA : MODE_BGRA;
         anim_decoder.reset(WebPAnimDecoderNew(&webp_data, &dec_options));
         CV_Assert(anim_decoder.get() && "Error parsing image");
 
@@ -284,7 +284,7 @@ bool WebPDecoder::readData(Mat &img)
     if (m_type == CV_8UC3)
     {
         CV_CheckTypeEQ(read_img.type(), CV_8UC3, "");
-        if (m_use_rgb)
+        if (m_use_bgr)
             res_ptr = WebPDecodeRGBInto(data.ptr(), data.total(), out_data,
                 (int)out_data_size, (int)read_img.step);
         else
@@ -294,7 +294,7 @@ bool WebPDecoder::readData(Mat &img)
     else if (m_type == CV_8UC4)
     {
         CV_CheckTypeEQ(read_img.type(), CV_8UC4, "");
-        if (m_use_rgb)
+        if (m_use_bgr)
             res_ptr = WebPDecodeRGBAInto(data.ptr(), data.total(), out_data,
                 (int)out_data_size, (int)read_img.step);
         else

@@ -99,6 +99,8 @@ int main() {
     std::cout << "ウィンドウが作成されました。動画を表示中..." << std::endl;
 
     cv::Mat frame;
+    int frame_count = 0;
+    
     while (true) {
         cap >> frame;
         if (frame.empty()) {
@@ -129,8 +131,9 @@ int main() {
     // リソースを解放
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
-    cap.release();
     SDL_Quit();
+    cv::destroyAllWindows();
+    cap.release();
     std::cout << "プログラムが終了しました" << std::endl;
     return 0;
 }

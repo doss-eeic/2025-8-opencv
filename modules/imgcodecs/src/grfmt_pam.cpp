@@ -631,18 +631,18 @@ bool PAMDecoder::readData(Mat& img)
                         bool funcout = false;
                         if (fmt->cvt_func)
                             funcout = fmt->cvt_func (src, data, m_width, target_channels,
-                                img.depth(), m_use_rgb);
+                                img.depth(), m_use_bgr);
                         /* fall back to default if there is no conversion function or it
                          * can't handle the specified characteristics
                          */
                         if (!funcout)
                             basic_conversion (src, &fmt->layout, m_channels,
-                                m_width, data, target_channels, img.depth(), m_use_rgb);
+                                m_width, data, target_channels, img.depth(), m_use_bgr);
 
                     /* default to selecting the first available channels */
                     } else {
                         basic_conversion (src, &layout, m_channels,
-                            m_width, data, target_channels, img.depth(), m_use_rgb);
+                            m_width, data, target_channels, img.depth(), m_use_bgr);
                     }
                 }
             }

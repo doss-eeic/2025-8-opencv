@@ -657,7 +657,7 @@ bool Jpeg2KOpjDecoderBase::readData( Mat& img )
         CV_Assert(comp.data && "OpenJPEG2000: missing component data (unsupported / broken input)");
     }
 
-    return decode(*image_, img, shift, m_use_rgb);
+    return decode(*image_, img, shift, m_use_bgr);
 }
 
 } // namespace detail

@@ -639,11 +639,11 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         mOutImage.create(sz, CV_8UC3);
         if ( pixelFormat == kCVPixelFormatType_32BGRA ) {
             cv::Mat devImage(sz, CV_8UC4, baseaddress, rowBytes);
-            cv::cvtColor(devImage, mOutImage, cv::COLOR_BGRA2BGR);
+            cv::cvtColor(devImage, mOutImage, cv::COLOR_BGRA2RGB);
             res = true;
         } else if ( pixelFormat == kCVPixelFormatType_422YpCbCr8 ) {
             cv::Mat devImage(sz, CV_8UC2, baseaddress, rowBytes);
-            cv::cvtColor(devImage, mOutImage, cv::COLOR_YUV2BGR_UYVY);
+            cv::cvtColor(devImage, mOutImage, cv::COLOR_YUV2RGB_UYVY);
             res = true;
         }
     } else {
@@ -681,7 +681,7 @@ CvCaptureFile::CvCaptureFile(const char* filename) {
     mAssetReader = nil;
     mTrackOutput = nil;
     currSize = 0;
-    mMode = CV_CAP_MODE_BGR;
+    mMode = CV_CAP_MODE_RGB;
     mFormat = CV_8UC3;
     mCurrentSampleBuffer = NULL;
     mGrabbedPixels = NULL;

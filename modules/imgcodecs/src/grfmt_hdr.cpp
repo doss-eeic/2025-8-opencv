@@ -109,8 +109,8 @@ bool HdrDecoder::readData(Mat& _img)
         case 1: cvtColor(img, _img, COLOR_BGR2GRAY); break;
         case 3:
         // TODO, try to modify RGBE_ReadPixels_RLE to load rgb data directly.
-        if (m_use_rgb)
-            cv::cvtColor(img, _img, cv::COLOR_BGR2RGB);
+        if (m_use_bgr)
+            cv::cvtColor(img, _img, cv::COLOR_RGB2BGR);
         else
             img.copyTo(_img);
         break;

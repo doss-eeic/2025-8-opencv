@@ -186,7 +186,7 @@ protected:
     String m_signature;   ///< Signature for identifying the image format.
     Mat m_buf;            ///< Buffer holding the image data when loaded from memory.
     bool m_buf_supported; ///< Flag indicating whether buffer-based loading is supported.
-    bool m_use_rgb;       ///< Flag indicating whether to decode the image in RGB order.
+    bool m_use_bgr;       ///< Flag indicating whether to decode the image in BGR order.
     ExifReader m_exif;    ///< Object for reading EXIF metadata from the image.
     size_t m_frame_count; ///< Number of frames in the image (for animations and multi-page images).
     Animation m_animation;

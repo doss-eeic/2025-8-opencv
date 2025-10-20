@@ -386,6 +386,10 @@ Only windows created without cv::WINDOW_AUTOSIZE flag can be resized.
 @param width The new window width.
 @param height The new window height.
  */
+
+
+CV_EXPORTS_W void imshow_zoomable(const cv::String& winname, const cv::Mat& img);
+
 CV_EXPORTS_W void resizeWindow(const String& winname, int width, int height);
 
 /** @overload

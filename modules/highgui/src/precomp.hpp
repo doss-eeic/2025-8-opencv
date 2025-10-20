@@ -151,7 +151,7 @@ double cvGetOpenGlProp_QT(const char* name);
 double cvGetPropVisible_QT(const char* name);
 #endif
 
-inline void convertToShow(const cv::Mat &src, cv::Mat &dst, bool toRGB = true)
+inline void convertToShow(const cv::Mat &src, cv::Mat &dst, bool toBGR = false)
 {
     const int src_depth = src.depth();
     CV_Assert(src_depth != CV_16F && src_depth != CV_32S);
@@ -175,13 +175,13 @@ inline void convertToShow(const cv::Mat &src, cv::Mat &dst, bool toRGB = true)
         src.convertTo(tmp, CV_8U, 255., 0.);
         break;
     }
-    cv::cvtColor(tmp, dst, toRGB ? cv::COLOR_BGR2RGB : cv::COLOR_BGRA2BGR, dst.channels());
+    cv::cvtColor(tmp, dst, toBGR ? cv::COLOR_RGB2BGR : cv::COLOR_RGBA2RGB, dst.channels());
 }
 
-inline void convertToShow(const cv::Mat &src, const CvMat* arr, bool toRGB = true)
+inline void convertToShow(const cv::Mat &src, const CvMat* arr, bool toBGR = false)
 {
     cv::Mat dst = cv::cvarrToMat(arr);
-    convertToShow(src, dst, toRGB);
+    convertToShow(src, dst, toBGR);
     CV_Assert(dst.data == arr->data.ptr);
 }
 

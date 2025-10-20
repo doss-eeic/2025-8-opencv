@@ -8,7 +8,7 @@ void display_image_by_sdl(cv::Mat image, SDL_Window* window, SDL_Renderer* rende
         image.cols, image.rows,
         24, // ビット深度
         image.step, // ピッチ
-        0x00FF0000, 0x0000FF00, 0x000000FF, 0x00000000 // RGBマスク
+        0x000000FF, 0x0000FF00, 0x00FF0000, 0x00000000 
     );
     if (!surface) {
         std::cerr << " Surfaceの作成に失敗しました: " << SDL_GetError() << std::endl;

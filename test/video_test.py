@@ -1,9 +1,6 @@
-from PIL import Image
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from matplotlib.patches import Rectangle
 
 
 
@@ -36,11 +33,8 @@ def animate(frame_num):
     
     frame_count += 1
     
-    # BGRからRGBに変換
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    
     # 画像を更新
-    im.set_array(frame_rgb)
+    im.set_array(frame)
     
     # フレームカウントを表示
     ax.set_title(f"リアルタイムカメラ映像 - フレーム: {frame_count}", fontsize=16)

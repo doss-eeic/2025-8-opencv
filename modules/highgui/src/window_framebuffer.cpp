@@ -124,7 +124,7 @@ void FramebufferWindow::imshow(InputArray image)
         case 4:
             {
                 Mat tmp(img.rows, img.cols, CV_8UC3);
-                convertToShow(img, tmp, true);
+                convertToShow(img, tmp, false);
                 img = tmp;
             }
             break;
@@ -132,9 +132,9 @@ void FramebufferWindow::imshow(InputArray image)
             CV_Error(cv::Error::StsBadArg, "Bad image: wrong number of channels");
     }
     {
-        Mat bgra(img.rows, img.cols, CV_8UC4);
-        cvtColor(img, bgra, COLOR_RGB2BGRA, bgra.channels());
-        img = bgra;
+        Mat rgba(img.rows, img.cols, CV_8UC4);
+        cvtColor(img, rgba, COLOR_RGB2RGBA, rgba.channels()); 
+        img = rgba;
     }
 
     int newWidth = windowRect.width;

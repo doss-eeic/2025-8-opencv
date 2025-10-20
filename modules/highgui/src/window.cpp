@@ -1093,6 +1093,67 @@ void cv::imshow(const String& winname, const ogl::Texture2D& _tex)
 #endif
 }
 
+void cv::imshow_zoomable(const cv::String& winname, const cv::Mat& img) {
+    struct ZoomState {
+        bool dragging = false;
+        cv::Point dragStart;
+        cv::Rect roi;
+    } state;
+
+    const double zoomFactor = 2.0;
+    cv::Mat display;
+
+    cv::namedWindow(winname);
+    cv::setMouseCallback(winname,
+        [](int event, int x, int y, int, void* userdata) {
+            ZoomState* s = (ZoomState*)userdata;
+            if (event == cv::EVENT_LBUTTONDOWN) {
+                s->dragging = true;
+                s->dragStart = cv::Point(x, y);
+                s->roi = cv::Rect(x, y, 1, 1);
+            } else if (event == cv::EVENT_MOUSEMOVE && s->dragging) {
+                s->roi.width = x - s->dragStart.x;
+                s->roi.height = y - s->dragStart.y;
+            } else if (event == cv::EVENT_LBUTTONUP) {
+                s->dragging = false;
+                if (s->roi.width < 0) { s->roi.x += s->roi.width; s->roi.width *= -1; }
+                if (s->roi.height < 0) { s->roi.y += s->roi.height; s->roi.height *= -1; }
+            }
+        }, &state);
+
+    while (true) {
+        display = img.clone();
+
+        // ROIがある場合は拡大表示
+        if (state.roi.width > 0 && state.roi.height > 0 &&
+            state.roi.x >= 0 && state.roi.y >= 0 &&
+            state.roi.x + state.roi.width <= img.cols &&
+            state.roi.y + state.roi.height <= img.rows) {
+
+            cv::Mat zoomed = img(state.roi);
+            cv::resize(zoomed, zoomed, cv::Size(), zoomFactor, zoomFactor, cv::INTER_LINEAR);
+
+            int x_offset = (display.cols - zoomed.cols) / 2;
+            int y_offset = (display.rows - zoomed.rows) / 2;
+            cv::Rect centerRect(x_offset, y_offset,
+                                std::min(zoomed.cols, display.cols),
+                                std::min(zoomed.rows, display.rows));
+            zoomed(cv::Rect(0, 0, centerRect.width, centerRect.height)).copyTo(display(centerRect));
+        }
+
+        // ROI枠を描画
+        if (state.dragging) cv::rectangle(display, state.roi, cv::Scalar(0,255,0), 2);
+        cv::putText(display, "Press 'q' to quit", 
+                   cv::Point(10, img.rows - 20), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+        cv::imshow(winname, display);
+
+        int key = cv::waitKey(30);
+        if (key == 'q') break; // q で終了
+    }
+
+    cv::destroyWindow(winname);
+}
+
 const std::string cv::currentUIFramework()
 {
     CV_TRACE_FUNCTION();

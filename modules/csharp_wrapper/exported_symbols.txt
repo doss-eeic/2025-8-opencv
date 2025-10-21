@@ -1,0 +1,17 @@
+_opencv_videocapture_create
+_opencv_videocapture_isOpened
+_opencv_videocapture_read
+_opencv_videocapture_release
+_opencv_mat_create
+_opencv_mat_rows
+_opencv_mat_cols
+_opencv_mat_type
+_opencv_mat_empty
+_opencv_mat_release
+_opencv_imshow
+_opencv_waitKey
+_opencv_destroyAllWindows
+_opencv_initialize
+_opencv_cleanup
+_opencv_camera_read_and_show
+_opencv_camera_simple_test

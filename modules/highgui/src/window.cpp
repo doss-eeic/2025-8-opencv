@@ -1118,6 +1118,8 @@ void cv::imshow_zoomable(const cv::String& winname, const cv::Mat& img) {
                 s->dragging = false;
                 if (s->roi.width < 0) { s->roi.x += s->roi.width; s->roi.width *= -1; }
                 if (s->roi.height < 0) { s->roi.y += s->roi.height; s->roi.height *= -1; }
+            } else if (event == cv::EVENT_RBUTTONDOWN) {
+                s->roi = cv::Rect(); // リセット
             }
         }, &state);
 
@@ -1125,20 +1127,29 @@ void cv::imshow_zoomable(const cv::String& winname, const cv::Mat& img) {
         display = img.clone();
 
         // ROIがある場合は拡大表示
-        if (state.roi.width > 0 && state.roi.height > 0 &&
-            state.roi.x >= 0 && state.roi.y >= 0 &&
-            state.roi.x + state.roi.width <= img.cols &&
-            state.roi.y + state.roi.height <= img.rows) {
+        if (state.roi.width > 0 && state.roi.height > 0) {
+            // ROIが画像の範囲内に収まっているかチェック
+            cv::Rect valid_roi = state.roi & cv::Rect(0, 0, img.cols, img.rows);
+            if (valid_roi.area() > 0) {
+                cv::Mat zoomed = img(valid_roi);
+                // 拡大後のサイズがウィンドウを超えないように調整
+                double aspect_ratio = (double)valid_roi.width / valid_roi.height;
+                int zoomed_w, zoomed_h;
+                if (aspect_ratio > (double)display.cols / display.rows) {
+                    zoomed_w = display.cols;
+                    zoomed_h = (int)(zoomed_w / aspect_ratio);
+                } else {
+                    zoomed_h = display.rows;
+                    zoomed_w = (int)(zoomed_h * aspect_ratio);
+                }
+                
+                cv::resize(zoomed, zoomed, cv::Size(zoomed_w, zoomed_h), 0, 0, cv::INTER_LINEAR);
 
-            cv::Mat zoomed = img(state.roi);
-            cv::resize(zoomed, zoomed, cv::Size(), zoomFactor, zoomFactor, cv::INTER_LINEAR);
-
-            int x_offset = (display.cols - zoomed.cols) / 2;
-            int y_offset = (display.rows - zoomed.rows) / 2;
-            cv::Rect centerRect(x_offset, y_offset,
-                                std::min(zoomed.cols, display.cols),
-                                std::min(zoomed.rows, display.rows));
-            zoomed(cv::Rect(0, 0, centerRect.width, centerRect.height)).copyTo(display(centerRect));
+                // 中央に配置
+                int x_offset = (display.cols - zoomed.cols) / 2;
+                int y_offset = (display.rows - zoomed.rows) / 2;
+                zoomed.copyTo(display(cv::Rect(x_offset, y_offset, zoomed.cols, zoomed.rows)));
+            }
         }
 
         // ROI枠を描画

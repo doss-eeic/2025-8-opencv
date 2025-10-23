@@ -47,6 +47,18 @@
 
 // in later times, use this file as a dispatcher to implementations like cvcap.cpp
 
+// ズーム可能ウィンドウの状態を管理する構造体
+struct ZoomableWindowState
+{
+    cv::String winname;
+    cv::Mat original_image;
+    cv::Rect current_roi;
+    bool is_selecting;      
+    cv::Point selection_start;  
+};
+
+// ウィンドウ名をキーとして、各ウィンドウの状態を保持する静的マップ
+static std::map<cv::String, ZoomableWindowState> g_zoomable_windows;
 
 using namespace cv;
 using namespace cv::highgui_backend;
@@ -1093,77 +1105,145 @@ void cv::imshow(const String& winname, const ogl::Texture2D& _tex)
 #endif
 }
 
-void cv::imshow_zoomable(const cv::String& winname, const cv::Mat& img) {
-    struct ZoomState {
-        bool dragging = false;
-        cv::Point dragStart;
-        cv::Rect roi;
-    } state;
 
-    const double zoomFactor = 2.0;
-    cv::Mat display;
+static void icvZoomMouseCallback(int event, int x, int y, int flags, void* userdata)
+{
+    ZoomableWindowState* state = static_cast<ZoomableWindowState*>(userdata);
+    if (!state) return;
 
-    cv::namedWindow(winname);
-    cv::setMouseCallback(winname,
-        [](int event, int x, int y, int, void* userdata) {
-            ZoomState* s = (ZoomState*)userdata;
-            if (event == cv::EVENT_LBUTTONDOWN) {
-                s->dragging = true;
-                s->dragStart = cv::Point(x, y);
-                s->roi = cv::Rect(x, y, 1, 1);
-            } else if (event == cv::EVENT_MOUSEMOVE && s->dragging) {
-                s->roi.width = x - s->dragStart.x;
-                s->roi.height = y - s->dragStart.y;
-            } else if (event == cv::EVENT_LBUTTONUP) {
-                s->dragging = false;
-                if (s->roi.width < 0) { s->roi.x += s->roi.width; s->roi.width *= -1; }
-                if (s->roi.height < 0) { s->roi.y += s->roi.height; s->roi.height *= -1; }
-            } else if (event == cv::EVENT_RBUTTONDOWN) {
-                s->roi = cv::Rect(); // リセット
-            }
-        }, &state);
-
-    while (true) {
-        display = img.clone();
-
-        // ROIがある場合は拡大表示
-        if (state.roi.width > 0 && state.roi.height > 0) {
-            // ROIが画像の範囲内に収まっているかチェック
-            cv::Rect valid_roi = state.roi & cv::Rect(0, 0, img.cols, img.rows);
-            if (valid_roi.area() > 0) {
-                cv::Mat zoomed = img(valid_roi);
-                // 拡大後のサイズがウィンドウを超えないように調整
-                double aspect_ratio = (double)valid_roi.width / valid_roi.height;
-                int zoomed_w, zoomed_h;
-                if (aspect_ratio > (double)display.cols / display.rows) {
-                    zoomed_w = display.cols;
-                    zoomed_h = (int)(zoomed_w / aspect_ratio);
-                } else {
-                    zoomed_h = display.rows;
-                    zoomed_w = (int)(zoomed_h * aspect_ratio);
-                }
-                
-                cv::resize(zoomed, zoomed, cv::Size(zoomed_w, zoomed_h), 0, 0, cv::INTER_LINEAR);
-
-                // 中央に配置
-                int x_offset = (display.cols - zoomed.cols) / 2;
-                int y_offset = (display.rows - zoomed.rows) / 2;
-                zoomed.copyTo(display(cv::Rect(x_offset, y_offset, zoomed.cols, zoomed.rows)));
-            }
-        }
-
-        // ROI枠を描画
-        if (state.dragging) cv::rectangle(display, state.roi, cv::Scalar(0,255,0), 2);
-        cv::putText(display, "Press 'q' to quit", 
-                   cv::Point(10, img.rows - 20), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
-        cv::imshow(winname, display);
-
-        int key = cv::waitKey(30);
-        if (key == 'q') break; // q で終了
+    // 左クリック開始
+    if (event == cv::EVENT_LBUTTONDOWN)
+    {
+        state->is_selecting = true;
+        state->selection_start = cv::Point(x, y);
     }
 
-    cv::destroyWindow(winname);
+    // ドラッグ中
+    else if (event == cv::EVENT_MOUSEMOVE)
+    {
+        if (state->is_selecting)
+        {
+
+            cv::Rect client_rect = cv::getWindowImageRect(state->winname);
+            if (client_rect.width <= 0 || client_rect.height <= 0) return;
+            cv::Mat base_view;
+            cv::resize(state->original_image(state->current_roi), base_view, client_rect.size());
+
+
+            cv::Mat view_with_feedback = base_view.clone();
+            cv::rectangle(view_with_feedback, state->selection_start, cv::Point(x, y), cv::Scalar(255, 0, 0), 2);
+
+
+            cv::imshow(state->winname, view_with_feedback);
+        }
+    }
+
+    // 左クリック終了
+    else if (event == cv::EVENT_LBUTTONUP)
+    {
+        if(state->is_selecting)
+        {
+            state->is_selecting = false;
+
+            cv::Rect client_rect = cv::getWindowImageRect(state->winname);
+            if (client_rect.width <= 0 || client_rect.height <= 0) return;
+            
+            // 負の幅、高さを扱えるように正規化
+            cv::Rect selection_rect = cv::Rect(
+                std::min(state->selection_start.x, x),
+                std::min(state->selection_start.y, y),
+                std::abs(x - state->selection_start.x),
+                std::abs(y - state->selection_start.y)
+            );
+
+            if (selection_rect.width > 4 && selection_rect.height > 4)
+            {
+                double scale_x = (double)state->current_roi.width / client_rect.width;
+                double scale_y = (double)state->current_roi.height / client_rect.height;
+
+                state->current_roi.x += cvRound(selection_rect.x * scale_x);
+                state->current_roi.y += cvRound(selection_rect.y * scale_y);
+                state->current_roi.width = cvRound(selection_rect.width * scale_x);
+                state->current_roi.height = cvRound(selection_rect.height * scale_y);
+            }
+            
+        }
+        else
+        {
+ 
+            return;
+        }
+    }
+
+    // 右クリック
+    else if (event == cv::EVENT_RBUTTONDOWN)
+    {
+        state->current_roi = cv::Rect(0, 0, state->original_image.cols, state->original_image.rows);
+    }
+    else {
+        return; 
+    }
+
+    // 再描画処理
+    
+    // ROIの補正
+    if (state->current_roi.width < 1) state->current_roi.width = 1;
+    if (state->current_roi.height < 1) state->current_roi.height = 1;
+    if (state->current_roi.x < 0) state->current_roi.x = 0;
+    if (state->current_roi.y < 0) state->current_roi.y = 0;
+    if (state->current_roi.x + state->current_roi.width > state->original_image.cols)
+        state->current_roi.x = state->original_image.cols - state->current_roi.width;
+    if (state->current_roi.y + state->current_roi.height > state->original_image.rows)
+        state->current_roi.y = state->original_image.rows - state->current_roi.height;
+    
+    // 最終的な表示を更新
+    cv::Rect client_rect = cv::getWindowImageRect(state->winname);
+    if (client_rect.width > 0 && client_rect.height > 0)
+    {
+        cv::Mat final_view;
+        cv::resize(state->original_image(state->current_roi), final_view, client_rect.size());
+        cv::imshow(state->winname, final_view);
+    }
 }
+
+
+void cv::imshow_zoomable(const String& winname, InputArray _img)
+{
+    CV_TRACE_FUNCTION();
+    auto it = g_zoomable_windows.find(winname);
+
+    if (it == g_zoomable_windows.end())
+    {
+        namedWindow(winname, WINDOW_NORMAL);
+        ZoomableWindowState newState;
+        
+        newState.winname = winname; // ウィンドウ名を状態に保存
+
+        _img.copyTo(newState.original_image);
+        newState.current_roi = cv::Rect(0, 0, newState.original_image.cols, newState.original_image.rows);
+        g_zoomable_windows[winname] = newState;
+        setMouseCallback(winname, icvZoomMouseCallback, &g_zoomable_windows[winname]);
+    }
+    
+    // 状態を取得してオリジナル画像を更新
+    ZoomableWindowState& state = g_zoomable_windows[winname];
+    _img.copyTo(state.original_image);
+
+    // 初回表示やリセット時の描画（コールバックを介さない場合）
+    cv::Rect client_rect = getWindowImageRect(winname);
+    if (client_rect.width > 0 && client_rect.height > 0)
+    {
+        cv::Mat cropped = state.original_image(state.current_roi);
+        cv::Mat displayed;
+        cv::resize(cropped, displayed, client_rect.size());
+        imshow(winname, displayed);
+    }
+    else
+    {
+        imshow(winname, state.original_image);
+    }
+}
+
 
 const std::string cv::currentUIFramework()
 {

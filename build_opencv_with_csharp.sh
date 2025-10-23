@@ -8,7 +8,7 @@ set -e
 # Configuration
 BUILD_DIR="build"
 INSTALL_DIR="install"
-CMAKE_GENERATOR="Unix Makefiles"  # Change to "Visual Studio 16 2019" for Windows
+CMAKE_GENERATOR="Ninja"  # Using Ninja for faster builds
 
 # Colors for output
 RED='\033[0;31m'
@@ -33,9 +33,9 @@ cd $BUILD_DIR
 # Configure CMake
 echo -e "${YELLOW}Configuring CMake...${NC}"
 cmake -G "$CMAKE_GENERATOR" \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=Debug \
     -DBUILD_SHARED_LIBS=ON \
-    -DBUILD_opencv_csharp_wrapper=ON \
+    -DBUILD_opencv_csharp=ON \
     -DBUILD_opencv_world=ON \
     -DCMAKE_INSTALL_PREFIX="../$INSTALL_DIR" \
     -DWITH_FFMPEG=ON \
@@ -60,7 +60,7 @@ echo -e "${GREEN}CMake configuration successful!${NC}"
 
 # Build OpenCV
 echo -e "${YELLOW}Building OpenCV...${NC}"
-make -j$(nproc)
+ninja
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Build failed!${NC}"
@@ -71,7 +71,7 @@ echo -e "${GREEN}Build successful!${NC}"
 
 # Install OpenCV
 echo -e "${YELLOW}Installing OpenCV...${NC}"
-make install
+ninja install
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Installation failed!${NC}"

@@ -1,32 +1,32 @@
 # OpenCV C# Wrapper Module
 set(the_description "C# Wrapper for OpenCV")
 
-ocv_add_module(csharp_wrapper opencv_core opencv_imgproc opencv_videoio opencv_highgui)
+ocv_add_module(csharp opencv_core opencv_imgproc opencv_videoio opencv_highgui)
 
 # Create the module
 ocv_create_module()
 
 # Add source files explicitly after module creation
-target_sources(${the_module} PRIVATE opencv_csharp_wrapper.cpp)
+target_sources(${the_module} PRIVATE csharp.cpp)
 
 # Add include directories
 target_include_directories(${the_module} PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/core/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/imgproc/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/highgui/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/videoio/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/imgcodecs/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/calib3d/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/features2d/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/flann/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/dnn/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ml/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/objdetect/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/photo/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/stitching/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../modules/video/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../core/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../imgproc/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../highgui/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../videoio/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../imgcodecs/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../calib3d/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../features2d/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../flann/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dnn/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../ml/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../objdetect/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../photo/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../stitching/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../video/include
 )
 
 # Set module properties
@@ -62,7 +62,7 @@ install(TARGETS ${the_module}
 )
 
 # Install headers
-install(FILES opencv_csharp_wrapper.h
+install(FILES csharp.hpp
     DESTINATION ${OPENCV_INCLUDE_INSTALL_PATH}/opencv2
     COMPONENT dev
 )

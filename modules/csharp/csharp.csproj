@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="camera_test.cs" />
+    <Compile Include="csharp.cs" />
   </ItemGroup>
 
 </Project>

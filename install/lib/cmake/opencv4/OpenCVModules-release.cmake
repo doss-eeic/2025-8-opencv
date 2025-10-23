@@ -146,15 +146,15 @@ set_target_properties(opencv_video PROPERTIES
 list(APPEND _cmake_import_check_targets opencv_video )
 list(APPEND _cmake_import_check_files_for_opencv_video "${_IMPORT_PREFIX}/lib/libopencv_video.4.13.0.dylib" )
 
-# Import target "opencv_csharp_wrapper" for configuration "Release"
-set_property(TARGET opencv_csharp_wrapper APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
-set_target_properties(opencv_csharp_wrapper PROPERTIES
+# Import target "opencv_csharp" for configuration "Release"
+set_property(TARGET opencv_csharp APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
+set_target_properties(opencv_csharp PROPERTIES
   IMPORTED_LOCATION_RELEASE "${_IMPORT_PREFIX}/lib/libopencv_csharp_wrapper.4.13.0.dylib"
   IMPORTED_SONAME_RELEASE "@rpath/libopencv_csharp_wrapper.413.dylib"
   )
 
-list(APPEND _cmake_import_check_targets opencv_csharp_wrapper )
-list(APPEND _cmake_import_check_files_for_opencv_csharp_wrapper "${_IMPORT_PREFIX}/lib/libopencv_csharp_wrapper.4.13.0.dylib" )
+list(APPEND _cmake_import_check_targets opencv_csharp )
+list(APPEND _cmake_import_check_files_for_opencv_csharp "${_IMPORT_PREFIX}/lib/libopencv_csharp_wrapper.4.13.0.dylib" )
 
 # Import target "opencv_gapi" for configuration "Release"
 set_property(TARGET opencv_gapi APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)

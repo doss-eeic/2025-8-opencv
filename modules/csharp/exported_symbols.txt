@@ -1,0 +1,15 @@
+_cvsharp_videocapture_create
+_cvsharp_videocapture_isopened
+_cvsharp_videocapture_read
+_cvsharp_videocapture_release
+_cvsharp_mat_create
+_cvsharp_mat_create_with_params
+_cvsharp_mat_get_rows
+_cvsharp_mat_get_cols
+_cvsharp_mat_get_type
+_cvsharp_mat_is_empty
+_cvsharp_mat_release
+_cvsharp_imwrite
+_cvsharp_imshow
+_cvsharp_waitkey
+_cvsharp_destroyallwindows

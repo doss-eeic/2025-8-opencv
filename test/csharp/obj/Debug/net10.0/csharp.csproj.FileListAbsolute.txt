@@ -1,0 +1,15 @@
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/bin/Debug/net10.0/csharp
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/bin/Debug/net10.0/csharp.deps.json
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/bin/Debug/net10.0/csharp.runtimeconfig.json
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/bin/Debug/net10.0/csharp.dll
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/bin/Debug/net10.0/csharp.pdb
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/csharp.GeneratedMSBuildEditorConfig.editorconfig
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/csharp.AssemblyInfoInputs.cache
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/csharp.AssemblyInfo.cs
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/csharp.csproj.CoreCompileInputs.cache
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/csharp.sourcelink.json
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/csharp.dll
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/refint/csharp.dll
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/csharp.pdb
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/csharp.genruntimeconfig.cache
+/Users/junnamuzaurusu/Documents/3A/big_software/opencv/test/csharp/obj/Debug/net10.0/ref/csharp.dll

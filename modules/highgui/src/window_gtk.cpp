@@ -103,6 +103,8 @@ struct _CvImageWidget {
     GtkWidget widget;
     CvMat * original_image;
     CvMat * scaled_image;
+    double zoom_level;
+    CvPoint2D64f view_center;
     int flags;
 };
 
@@ -157,6 +159,9 @@ void cvImageWidgetSetImage(CvImageWidget * widget, const CvArr *arr)
         cvResize( widget->original_image, widget->scaled_image, CV_INTER_AREA );
     }
 
+    widget->zoom_level = 1.0;
+    widget->view_center = cvPoint2D64f(mat->cols / 2.0, mat->rows / 2.0);
+
     // window does not refresh without this
     gtk_widget_queue_draw( GTK_WIDGET(widget) );
 }
@@ -170,6 +175,8 @@ cvImageWidgetNew (int flags)
   CV_Assert(image_widget && "GTK widget creation is failed. Ensure that there is no GTK2/GTK3 libraries conflict");
   image_widget->original_image = 0;
   image_widget->scaled_image = 0;
+  image_widget->zoom_level = 1.0;
+  image_widget->view_center = cvPoint2D64f(0.0, 0.0);
   image_widget->flags = flags | CV_WINDOW_NO_IMAGE;
 
   return GTK_WIDGET (image_widget);
@@ -583,6 +590,7 @@ struct CvWindow : CvUIBase
     GtkWidget* frame;
     GtkWidget* paned;
     std::string name;
+
 
     int last_key;
     int flags;
@@ -1023,7 +1031,57 @@ static gboolean cvImageWidget_draw(GtkWidget* widget, cairo_t *cr, gpointer data
   cairo_t *cr = gdk_cairo_create(widget->window);
 #endif
 
-  if( image_widget->scaled_image ){
+if (image_widget->zoom_level > 1.0 && image_widget->original_image)
+    {
+        cv::Mat original_mat = cv::cvarrToMat(image_widget->original_image);
+        if (!original_mat.empty())
+        {
+            int view_width = gtk_widget_get_allocated_width(widget);
+            int view_height = gtk_widget_get_allocated_height(widget);
+
+            // ROI計算
+            double roi_width_f = (double)view_width / image_widget->zoom_level;
+            double roi_height_f = (double)view_height / image_widget->zoom_level;
+            double roi_x_f = image_widget->view_center.x - roi_width_f / 2.0;
+            double roi_y_f = image_widget->view_center.y - roi_height_f / 2.0;
+            cv::Rect roi(cvRound(roi_x_f), cvRound(roi_y_f), cvRound(roi_width_f), cvRound(roi_height_f));
+            roi &= cv::Rect(0, 0, original_mat.cols, original_mat.rows);
+
+            if (roi.width > 0 && roi.height > 0)
+            {
+                cv::Mat mat_to_show;
+                cv::resize(original_mat(roi), mat_to_show, cv::Size(view_width, view_height), 0, 0, cv::INTER_NEAREST);
+
+                // Pixbufに変換
+                cv::Mat temp_rgb;
+                if (mat_to_show.channels() == 3) {
+                    // original_image は既にRGBなので、変換しない
+                    temp_rgb = mat_to_show;
+                }
+                else if (mat_to_show.channels() == 4) {
+                    // 4チャンネルの場合も、既にRGBAと仮定
+                    temp_rgb = mat_to_show;
+                }
+                else if (mat_to_show.channels() == 1) {
+                    // グレーだけはRGBに変換する必要がある
+                    cv::cvtColor(mat_to_show, temp_rgb, cv::COLOR_GRAY2RGB);
+                }
+                else {
+                    temp_rgb = mat_to_show.clone(); // 念のため
+                }
+
+                GBytes* bytes = g_bytes_new(temp_rgb.data, temp_rgb.total() * temp_rgb.elemSize());
+                pixbuf = gdk_pixbuf_new_from_bytes(bytes, GDK_COLORSPACE_RGB, false, 8, 
+                                                   temp_rgb.cols, temp_rgb.rows, (int)temp_rgb.step);
+                g_bytes_unref(bytes);
+
+                if (pixbuf)
+                    gdk_cairo_set_source_pixbuf(cr, pixbuf, 0, 0); // ズーム時は(0,0)から描画
+            }
+        }
+    }
+
+else if( image_widget->scaled_image ){
       // center image in available region
       int x0 = (gtk_widget_get_allocated_width(widget) - image_widget->scaled_image->cols)/2;
       int y0 = (gtk_widget_get_allocated_height(widget) - image_widget->scaled_image->rows)/2;
@@ -1902,6 +1960,55 @@ static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_da
     // TODO move this logic to CvImageWidget
     // TODO add try-catch wrappers into all callbacks
     CvWindow* window = (CvWindow*)user_data;
+    CvImageWidget * image_widget = CV_IMAGE_WIDGET( widget );
+
+if( event->type == GDK_SCROLL )
+    {
+        GdkEventScroll* event_scroll = (GdkEventScroll*)event;
+    printf("[DEBUG] GDK_SCROLL event received! (image_widget = %p)\n", (void*)image_widget);
+        if (image_widget) {
+             printf("    -> image_widget->original_image = %p\n", (void*)image_widget->original_image);
+        }
+        if (image_widget->original_image)
+        {
+printf("    -> OK: original_image is valid. Running zoom logic...\n");
+            double zoom_factor = 1.1;
+            double old_zoom = image_widget->zoom_level;
+
+            if (event_scroll->delta_y < 0) // 上スクロール (delta_yがマイナス)
+            {
+                image_widget->zoom_level *= zoom_factor;
+            }
+            else if (event_scroll->delta_y > 0) // 下スクロール (delta_yがプラス)
+            {
+                image_widget->zoom_level /= zoom_factor;
+            }
+            
+            if (image_widget->zoom_level < 1.0) image_widget->zoom_level = 1.0;
+            if (image_widget->zoom_level > 30.0) image_widget->zoom_level = 30.0;
+
+            GtkAllocation allocation;
+            gtk_widget_get_allocation(GTK_WIDGET(image_widget), &allocation);
+            double view_width = allocation.width;
+            double view_height = allocation.height;
+
+            double mouse_x = event_scroll->x;
+            double mouse_y = event_scroll->y;
+            double img_x = image_widget->view_center.x + (mouse_x - view_width / 2.0) / old_zoom;
+            double img_y = image_widget->view_center.y + (mouse_y - view_height / 2.0) / old_zoom;
+
+            image_widget->view_center.x = img_x - (mouse_x - view_width / 2.0) / image_widget->zoom_level;
+            image_widget->view_center.y = img_y - (mouse_y - view_height / 2.0) / image_widget->zoom_level;
+
+printf("    -> New zoom: %f\n", image_widget->zoom_level);
+            gtk_widget_queue_draw(GTK_WIDGET(image_widget));
+printf("    -> gtk_widget_queue_draw() called.\n");
+        } else {
+    printf("    -> SKIPPED: original_image is NULL.\n");
+        }
+    }
+
+
     if (!window || !widget ||
         window->signature != CV_WINDOW_MAGIC_VAL ||
         window->widget != widget ||
@@ -1911,7 +2018,7 @@ static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_da
     CvPoint2D32f pt32f = {-1., -1.};
     CvPoint pt = {-1,-1};
     int cv_event = -1, state = 0, flags = 0;
-    CvImageWidget * image_widget = CV_IMAGE_WIDGET( widget );
+
 
     if( event->type == GDK_MOTION_NOTIFY )
     {

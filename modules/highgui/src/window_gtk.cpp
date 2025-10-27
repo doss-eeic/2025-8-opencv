@@ -106,6 +106,8 @@ struct _CvImageWidget {
     CvMat * scaled_image;
     double zoom_level;
     CvPoint2D64f view_center;
+    gboolean is_panning;       
+    CvPoint2D64f pan_start_view;
     int flags;
 };
 
@@ -153,6 +155,7 @@ void cvImageWidgetSetImage(CvImageWidget * widget, const CvArr *arr)
     if(!widget->original_image){ //最初の画像読み込み
         widget->zoom_level = 1.0;
         widget->view_center = cvPoint2D64f(mat->cols / 2.0, mat->rows / 2.0);
+        widget->is_panning = FALSE;
         widget->original_image = cvCreateMat( mat->rows, mat->cols, CV_8UC3 );
         gtk_widget_queue_resize( GTK_WIDGET( widget ) );
     }
@@ -179,6 +182,8 @@ cvImageWidgetNew (int flags)
   image_widget->scaled_image = 0;
   image_widget->zoom_level = 1.0;
   image_widget->view_center = cvPoint2D64f(0.0, 0.0);
+  image_widget->is_panning = FALSE;
+  image_widget->pan_start_view = cvPoint2D64f(0, 0);
   image_widget->flags = flags | CV_WINDOW_NO_IMAGE;
 
   return GTK_WIDGET (image_widget);
@@ -1964,7 +1969,7 @@ static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_da
     CvWindow* window = (CvWindow*)user_data;
     CvImageWidget * image_widget = CV_IMAGE_WIDGET( widget );
 
-if( event->type == GDK_SCROLL )
+    if( event->type == GDK_SCROLL )
     {
         GdkEventScroll* event_scroll = (GdkEventScroll*)event;
         if (image_widget->original_image)
@@ -2029,6 +2034,80 @@ if( event->type == GDK_SCROLL )
 
     }
 
+// 1. マウスボタンを押した時 (パン開始)
+    else if( event->type == GDK_BUTTON_PRESS )
+    {
+        GdkEventButton* event_button = (GdkEventButton*)event;
+        // 左クリック(button 1)で、かつズーム中のみ
+        if (event_button->button == 1 && image_widget->zoom_level > 1.0)
+        {
+            image_widget->is_panning = TRUE;
+            // ドラッグ開始座標を記録
+            image_widget->pan_start_view.x = event_button->x;
+            image_widget->pan_start_view.y = event_button->y;
+            
+        }
+    }
+    
+    // 2. マウスをドラッグした時 (パン実行)
+    else if( event->type == GDK_MOTION_NOTIFY )
+    {
+        GdkEventMotion* event_motion = (GdkEventMotion*)event;
+        if (image_widget->is_panning) // パン状態の時だけ実行
+        {
+            // 現在のマウス座標
+            CvPoint2D64f current_view = cvPoint2D64f(event_motion->x, event_motion->y);
+
+            // ウィジェット上での移動量
+            double view_delta_x = current_view.x - image_widget->pan_start_view.x;
+            double view_delta_y = current_view.y - image_widget->pan_start_view.y;
+
+            // 画像上での移動量 (ズームレベルで割る)
+            double img_delta_x = view_delta_x / image_widget->zoom_level;
+            double img_delta_y = view_delta_y / image_widget->zoom_level;
+
+            // 理想の中心座標 (マウスの移動とは *逆方向* に中心をずらす)
+            double desired_center_x = image_widget->view_center.x - img_delta_x;
+            double desired_center_y = image_widget->view_center.y - img_delta_y;
+
+            // クランプ処理
+            cv::Mat original_mat = cv::cvarrToMat(image_widget->original_image);
+            GtkAllocation allocation;
+            gtk_widget_get_allocation(GTK_WIDGET(image_widget), &allocation);
+            double view_width = allocation.width;
+            double view_height = allocation.height;
+            double img_cols = original_mat.cols;
+            double img_rows = original_mat.rows;
+
+            double new_roi_half_width = (view_width / image_widget->zoom_level) / 2.0;
+            double new_roi_half_height = (view_height / image_widget->zoom_level) / 2.0;
+
+            double min_center_x = new_roi_half_width;
+            double max_center_x = img_cols - new_roi_half_width;
+            double min_center_y = new_roi_half_height;
+            double max_center_y = img_rows - new_roi_half_height;
+
+            image_widget->view_center.x = std::max(min_center_x, std::min(max_center_x, desired_center_x));
+            image_widget->view_center.y = std::max(min_center_y, std::min(max_center_y, desired_center_y));
+
+
+            // ドラッグ開始座標を今の座標に更新する
+            image_widget->pan_start_view = current_view;
+
+            gtk_widget_queue_draw(GTK_WIDGET(image_widget));
+        }
+    }
+
+    // 3. マウスボタンを離した時 (パン終了)
+    else if( event->type == GDK_BUTTON_RELEASE )
+    {
+        GdkEventButton* event_button = (GdkEventButton*)event;
+        if (event_button->button == 1 && image_widget->is_panning)
+        {
+            image_widget->is_panning = FALSE;
+
+        }
+    }
 
     if (!window || !widget ||
         window->signature != CV_WINDOW_MAGIC_VAL ||

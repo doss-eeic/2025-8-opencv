@@ -53,6 +53,7 @@
 #include <gdk/gdkkeysyms.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <stdio.h>
+#include <algorithm>
 
 #if (GTK_MAJOR_VERSION == 2)
   #define GTK_VERSION2 1
@@ -149,7 +150,9 @@ void cvImageWidgetSetImage(CvImageWidget * widget, const CvArr *arr)
     if(widget->original_image && !CV_ARE_SIZES_EQ(mat, widget->original_image)){
         cvReleaseMat( &widget->original_image );
     }
-    if(!widget->original_image){
+    if(!widget->original_image){ //最初の画像読み込み
+        widget->zoom_level = 1.0;
+        widget->view_center = cvPoint2D64f(mat->cols / 2.0, mat->rows / 2.0);
         widget->original_image = cvCreateMat( mat->rows, mat->cols, CV_8UC3 );
         gtk_widget_queue_resize( GTK_WIDGET( widget ) );
     }
@@ -159,8 +162,7 @@ void cvImageWidgetSetImage(CvImageWidget * widget, const CvArr *arr)
         cvResize( widget->original_image, widget->scaled_image, CV_INTER_AREA );
     }
 
-    widget->zoom_level = 1.0;
-    widget->view_center = cvPoint2D64f(mat->cols / 2.0, mat->rows / 2.0);
+
 
     // window does not refresh without this
     gtk_widget_queue_draw( GTK_WIDGET(widget) );
@@ -1965,13 +1967,8 @@ static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_da
 if( event->type == GDK_SCROLL )
     {
         GdkEventScroll* event_scroll = (GdkEventScroll*)event;
-    printf("[DEBUG] GDK_SCROLL event received! (image_widget = %p)\n", (void*)image_widget);
-        if (image_widget) {
-             printf("    -> image_widget->original_image = %p\n", (void*)image_widget->original_image);
-        }
         if (image_widget->original_image)
         {
-printf("    -> OK: original_image is valid. Running zoom logic...\n");
             double zoom_factor = 1.1;
             double old_zoom = image_widget->zoom_level;
 
@@ -1997,15 +1994,39 @@ printf("    -> OK: original_image is valid. Running zoom logic...\n");
             double img_x = image_widget->view_center.x + (mouse_x - view_width / 2.0) / old_zoom;
             double img_y = image_widget->view_center.y + (mouse_y - view_height / 2.0) / old_zoom;
 
-            image_widget->view_center.x = img_x - (mouse_x - view_width / 2.0) / image_widget->zoom_level;
-            image_widget->view_center.y = img_y - (mouse_y - view_height / 2.0) / image_widget->zoom_level;
+            //ズーム後の理想の中心座標
+            double desired_center_x = img_x - (mouse_x - view_width / 2.0) / image_widget->zoom_level;
+            double desired_center_y = img_y - (mouse_y - view_height / 2.0) / image_widget->zoom_level;
+            
+            // 中心座標の有効範囲 
+            cv::Mat original_mat = cv::cvarrToMat(image_widget->original_image);
+            double img_cols = original_mat.cols;
+            double img_rows = original_mat.rows;
 
-printf("    -> New zoom: %f\n", image_widget->zoom_level);
+
+            double new_roi_half_width = (view_width / image_widget->zoom_level) / 2.0;
+            double new_roi_half_height = (view_height / image_widget->zoom_level) / 2.0;
+
+            // 中心座標が取りうる範囲
+            double min_center_x = new_roi_half_width;
+            double max_center_x = img_cols - new_roi_half_width;
+            double min_center_y = new_roi_half_height;
+            double max_center_y = img_rows - new_roi_half_height;
+            
+            // 理想の中心座標を有効範囲内に補正
+            image_widget->view_center.x = std::max(min_center_x, std::min(max_center_x, desired_center_x));
+            image_widget->view_center.y = std::max(min_center_y, std::min(max_center_y, desired_center_y));
+            
+            // 画像がビューより小さい場合中心がズレないように固定
+            if (img_cols < view_width / image_widget->zoom_level) {
+                image_widget->view_center.x = img_cols / 2.0;
+            }
+            if (img_rows < view_height / image_widget->zoom_level) {
+                image_widget->view_center.y = img_rows / 2.0;
+            }
             gtk_widget_queue_draw(GTK_WIDGET(image_widget));
-printf("    -> gtk_widget_queue_draw() called.\n");
-        } else {
-    printf("    -> SKIPPED: original_image is NULL.\n");
         }
+
     }
 
 

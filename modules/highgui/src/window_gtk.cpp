@@ -104,10 +104,14 @@ struct _CvImageWidget {
     GtkWidget widget;
     CvMat * original_image;
     CvMat * scaled_image;
-    double zoom_level;
+    double zoom_level; 
     CvPoint2D64f view_center;
     gboolean is_panning;       
     CvPoint2D64f pan_start_view;
+    cv::Mat paint_overlay;
+    int current_tool; //0: pan, 1: paint, 2: eraser
+    gboolean is_painting;
+    CvPoint last_paint_pt;
     int flags;
 };
 
@@ -152,11 +156,14 @@ void cvImageWidgetSetImage(CvImageWidget * widget, const CvArr *arr)
     if(widget->original_image && !CV_ARE_SIZES_EQ(mat, widget->original_image)){
         cvReleaseMat( &widget->original_image );
     }
-    if(!widget->original_image){ //最初の画像読み込み
+    if(!widget->original_image){ 
         widget->zoom_level = 1.0;
         widget->view_center = cvPoint2D64f(mat->cols / 2.0, mat->rows / 2.0);
         widget->is_panning = FALSE;
         widget->original_image = cvCreateMat( mat->rows, mat->cols, CV_8UC3 );
+        widget->paint_overlay = cv::Mat::zeros(mat->rows, mat->cols, CV_8UC1);
+        widget->current_tool = 0; 
+        widget->is_painting = FALSE;
         gtk_widget_queue_resize( GTK_WIDGET( widget ) );
     }
     CV_Assert(origin == 0);
@@ -185,6 +192,10 @@ cvImageWidgetNew (int flags)
   image_widget->is_panning = FALSE;
   image_widget->pan_start_view = cvPoint2D64f(0, 0);
   image_widget->flags = flags | CV_WINDOW_NO_IMAGE;
+  image_widget->paint_overlay = cv::Mat();
+  image_widget->current_tool = 0;          
+  image_widget->is_painting = FALSE;
+  image_widget->last_paint_pt = cvPoint(-1, -1);
 
   return GTK_WIDGET (image_widget);
 }
@@ -622,6 +633,10 @@ static gboolean icvOnClose( GtkWidget* widget, GdkEvent* event, gpointer user_da
 static gboolean icvOnKeyPress( GtkWidget* widget, GdkEventKey* event, gpointer user_data );
 static void icvOnTrackbar( GtkWidget* widget, gpointer user_data );
 static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_data );
+static void icvOnButtonPanClicked(GtkButton* button, gpointer user_data);
+static void icvOnButtonPenClicked(GtkButton* button, gpointer user_data);
+static void icvOnButtonEraserClicked(GtkButton* button, gpointer user_data);
+static CvPoint2D64f convert_view_to_image_coords(CvImageWidget* image_widget, double view_x, double view_y);
 
 int thread_started=0;
 static gpointer icvWindowThreadLoop(gpointer data);
@@ -1058,7 +1073,15 @@ if (image_widget->zoom_level > 1.0 && image_widget->original_image)
             {
                 cv::Mat mat_to_show;
                 cv::resize(original_mat(roi), mat_to_show, cv::Size(view_width, view_height), 0, 0, cv::INTER_NEAREST);
-
+            if (!image_widget->paint_overlay.empty())
+            {
+            cv::Mat overlay_mask;
+            
+            cv::resize(image_widget->paint_overlay(roi), overlay_mask,
+                       cv::Size(view_width, view_height), 0, 0, cv::INTER_NEAREST);
+            
+            mat_to_show.setTo(cv::Scalar(0, 0, 0), overlay_mask);
+            }
                 // Pixbufに変換
                 cv::Mat temp_rgb;
                 if (mat_to_show.channels() == 3) {
@@ -1088,25 +1111,51 @@ if (image_widget->zoom_level > 1.0 && image_widget->original_image)
         }
     }
 
-else if( image_widget->scaled_image ){
-      // center image in available region
-      int x0 = (gtk_widget_get_allocated_width(widget) - image_widget->scaled_image->cols)/2;
-      int y0 = (gtk_widget_get_allocated_height(widget) - image_widget->scaled_image->rows)/2;
+else if (image_widget->original_image) 
+    {
+        
+        cv::Mat original_mat = cv::cvarrToMat(image_widget->original_image);
+        int view_width = gtk_widget_get_allocated_width(widget);
+        int view_height = gtk_widget_get_allocated_height(widget);
 
-      pixbuf = gdk_pixbuf_new_from_data(image_widget->scaled_image->data.ptr, GDK_COLORSPACE_RGB, false,
-          8, MIN(image_widget->scaled_image->cols, gtk_widget_get_allocated_width(widget)),
-          MIN(image_widget->scaled_image->rows, gtk_widget_get_allocated_height(widget)),
-          image_widget->scaled_image->step, NULL, NULL);
+        if (view_width <= 0 || view_height <= 0) return TRUE;
 
-      gdk_cairo_set_source_pixbuf(cr, pixbuf, x0, y0);
-  }
-  else if( image_widget->original_image ){
-      pixbuf = gdk_pixbuf_new_from_data(image_widget->original_image->data.ptr, GDK_COLORSPACE_RGB, false,
-          8, MIN(image_widget->original_image->cols, gtk_widget_get_allocated_width(widget)),
-          MIN(image_widget->original_image->rows, gtk_widget_get_allocated_height(widget)),
-          image_widget->original_image->step, NULL, NULL);
-      gdk_cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
-  }
+        cv::Mat mat_to_show;
+
+        cv::resize(original_mat, mat_to_show, 
+                   cv::Size(view_width, view_height), 0, 0, cv::INTER_NEAREST);
+        
+        if (!image_widget->paint_overlay.empty())
+        {
+            cv::Mat overlay_mask;
+            cv::resize(image_widget->paint_overlay, overlay_mask,
+                       cv::Size(view_width, view_height), 0, 0, cv::INTER_NEAREST);
+                       
+            mat_to_show.setTo(cv::Scalar(0, 0, 0), overlay_mask);
+        }
+
+        cv::Mat temp_rgb;
+        if (mat_to_show.channels() == 3) {
+            temp_rgb = mat_to_show; 
+        } else if (mat_to_show.channels() == 1) {
+            cv::cvtColor(mat_to_show, temp_rgb, cv::COLOR_GRAY2RGB);
+        } else {
+            temp_rgb = mat_to_show.clone();
+        }
+
+        if (temp_rgb.empty()) return TRUE;
+
+        GBytes* bytes = g_bytes_new(temp_rgb.data, temp_rgb.total() * temp_rgb.elemSize());
+        pixbuf = gdk_pixbuf_new_from_bytes(bytes, GDK_COLORSPACE_RGB, 
+                                           temp_rgb.channels() == 4, 8, 
+                                           temp_rgb.cols, temp_rgb.rows, (int)temp_rgb.step);
+        g_bytes_unref(bytes);
+
+        if (pixbuf)
+        {
+            gdk_cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
+        }
+    }
 
   cairo_paint(cr);
   if(pixbuf)
@@ -1154,6 +1203,30 @@ static std::shared_ptr<CvWindow> namedWindow_(const std::string& name, int flags
         gtk_widget_show(window->glArea);
     } else {
         window->paned = gtk_vbox_new( FALSE, 0 );
+    GtkWidget* hbox_buttons = gtk_hbox_new(TRUE, 3); 
+
+    // ボタン作成
+    GtkWidget* btn_pan = gtk_button_new_with_label("Pan");
+    GtkWidget* btn_pen = gtk_button_new_with_label("Pen");
+    GtkWidget* btn_eraser = gtk_button_new_with_label("Eraser");
+
+    gtk_box_pack_start(GTK_BOX(hbox_buttons), btn_pan, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox_buttons), btn_pen, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox_buttons), btn_eraser, TRUE, TRUE, 0);
+
+    g_signal_connect(G_OBJECT(btn_pan), "clicked",
+                     G_CALLBACK(icvOnButtonPanClicked), (gpointer)window->widget);
+    g_signal_connect(G_OBJECT(btn_pen), "clicked",
+                     G_CALLBACK(icvOnButtonPenClicked), (gpointer)window->widget);
+    g_signal_connect(G_OBJECT(btn_eraser), "clicked",
+                     G_CALLBACK(icvOnButtonEraserClicked), (gpointer)window->widget);
+
+    gtk_box_pack_start(GTK_BOX(window->paned), hbox_buttons, FALSE, FALSE, 0);
+
+    gtk_widget_show(hbox_buttons);
+    gtk_widget_show(btn_pan);
+    gtk_widget_show(btn_pen);
+    gtk_widget_show(btn_eraser);
         gtk_box_pack_end( GTK_BOX(window->paned), window->widget, TRUE, TRUE, 0 );
         gtk_widget_show( window->widget );
         gtk_container_add( GTK_CONTAINER(window->frame), window->paned );
@@ -1161,6 +1234,29 @@ static std::shared_ptr<CvWindow> namedWindow_(const std::string& name, int flags
     }
 #else
     window->paned = gtk_vbox_new( FALSE, 0 );
+    GtkWidget* hbox_buttons = gtk_hbox_new(TRUE, 3);
+
+    GtkWidget* btn_pan = gtk_button_new_with_label("Pan");
+    GtkWidget* btn_pen = gtk_button_new_with_label("Pen");
+    GtkWidget* btn_eraser = gtk_button_new_with_label("Eraser");
+
+    gtk_box_pack_start(GTK_BOX(hbox_buttons), btn_pan, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox_buttons), btn_pen, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox_buttons), btn_eraser, TRUE, TRUE, 0);
+
+    g_signal_connect(G_OBJECT(btn_pan), "clicked",
+                     G_CALLBACK(icvOnButtonPanClicked), (gpointer)window->widget);
+    g_signal_connect(G_OBJECT(btn_pen), "clicked",
+                     G_CALLBACK(icvOnButtonPenClicked), (gpointer)window->widget);
+    g_signal_connect(G_OBJECT(btn_eraser), "clicked",
+                     G_CALLBACK(icvOnButtonEraserClicked), (gpointer)window->widget);
+
+    gtk_box_pack_start(GTK_BOX(window->paned), hbox_buttons, FALSE, FALSE, 0); 
+
+    gtk_widget_show(hbox_buttons);
+    gtk_widget_show(btn_pan);
+    gtk_widget_show(btn_pen);
+    gtk_widget_show(btn_eraser);
     gtk_box_pack_end( GTK_BOX(window->paned), window->widget, TRUE, TRUE, 0 );
     gtk_widget_show( window->widget );
     gtk_container_add( GTK_CONTAINER(window->frame), window->paned );
@@ -2034,25 +2130,39 @@ static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_da
 
     }
 
-// 1. マウスボタンを押した時 (パン開始)
     else if( event->type == GDK_BUTTON_PRESS )
     {
         GdkEventButton* event_button = (GdkEventButton*)event;
-        // 左クリック(button 1)で、かつズーム中のみ
-        if (event_button->button == 1 && image_widget->zoom_level > 1.0)
+        if (event_button->button == 1 && image_widget->original_image) 
+        {
+            if (image_widget->current_tool == 0) 
+            {
+                        if (event_button->button == 1 && image_widget->zoom_level > 1.0)
         {
             image_widget->is_panning = TRUE;
-            // ドラッグ開始座標を記録
             image_widget->pan_start_view.x = event_button->x;
             image_widget->pan_start_view.y = event_button->y;
             
         }
+            }
+            else if (image_widget->current_tool == 1 || image_widget->current_tool == 2) // ペイント
+            {
+                image_widget->is_painting = TRUE;
+                CvPoint2D64f img_pt = convert_view_to_image_coords(image_widget, event_button->x, event_button->y);
+                image_widget->last_paint_pt = cvPoint(cvRound(img_pt.x), cvRound(img_pt.y));
+
+                cv::Scalar color = (image_widget->current_tool == 1) ? cv::Scalar(255) : cv::Scalar(0);
+                cv::circle(image_widget->paint_overlay, image_widget->last_paint_pt, 2, color, -1, cv::LINE_AA);
+                gtk_widget_queue_draw(GTK_WIDGET(image_widget));
+            }
+        }
     }
-    
-    // 2. マウスをドラッグした時 (パン実行)
+
     else if( event->type == GDK_MOTION_NOTIFY )
     {
         GdkEventMotion* event_motion = (GdkEventMotion*)event;
+        if (image_widget->is_panning) // パン
+        {
         if (image_widget->is_panning) // パン状態の時だけ実行
         {
             // 現在のマウス座標
@@ -2096,16 +2206,30 @@ static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_da
 
             gtk_widget_queue_draw(GTK_WIDGET(image_widget));
         }
+        }
+        else if (image_widget->is_painting) // ペイント
+        {
+            CvPoint2D64f img_pt_f = convert_view_to_image_coords(image_widget, event_motion->x, event_motion->y);
+            CvPoint current_paint_pt = cvPoint(cvRound(img_pt_f.x), cvRound(img_pt_f.y));
+            cv::Scalar color = (image_widget->current_tool == 1) ? cv::Scalar(255) : cv::Scalar(0);
+
+            cv::line(image_widget->paint_overlay, image_widget->last_paint_pt, current_paint_pt, color, 5, cv::LINE_AA);
+
+            image_widget->last_paint_pt = current_paint_pt; 
+            gtk_widget_queue_draw(GTK_WIDGET(image_widget));
+        }
     }
 
-    // 3. マウスボタンを離した時 (パン終了)
     else if( event->type == GDK_BUTTON_RELEASE )
     {
-        GdkEventButton* event_button = (GdkEventButton*)event;
-        if (event_button->button == 1 && image_widget->is_panning)
+        if (image_widget->is_panning)
         {
             image_widget->is_panning = FALSE;
-
+        }
+        else if (image_widget->is_painting)
+        {
+            image_widget->is_painting = FALSE;
+            image_widget->last_paint_pt = cvPoint(-1, -1);
         }
     }
 
@@ -2233,6 +2357,54 @@ static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_da
     }
 
     return FALSE;
+}
+
+
+
+static void icvOnButtonPanClicked(GtkButton* button, gpointer user_data)
+{
+    CvImageWidget* image_widget = (CvImageWidget*)user_data;
+    image_widget->current_tool = 0; 
+}
+
+static void icvOnButtonPenClicked(GtkButton* button, gpointer user_data)
+{
+    CvImageWidget* image_widget = (CvImageWidget*)user_data;
+    image_widget->current_tool = 1; 
+}
+
+static void icvOnButtonEraserClicked(GtkButton* button, gpointer user_data)
+{
+    CvImageWidget* image_widget = (CvImageWidget*)user_data;
+    image_widget->current_tool = 2; 
+}
+
+static CvPoint2D64f convert_view_to_image_coords(
+    CvImageWidget* image_widget,
+    double view_x,
+    double view_y)
+{
+    if (!image_widget) return cvPoint2D64f(view_x, view_y);
+    
+    GtkAllocation allocation;
+#if GTK_MAJOR_VERSION >= 3
+    gtk_widget_get_allocation(GTK_WIDGET(image_widget), &allocation);
+#else
+    allocation = GTK_WIDGET(image_widget)->allocation;
+#endif
+    double view_width = allocation.width;
+    double view_height = allocation.height;
+    
+    double view_offset_x = view_x - (view_width / 2.0);
+    double view_offset_y = view_y - (view_height / 2.0);
+    
+    double img_offset_x = view_offset_x / image_widget->zoom_level;
+    double img_offset_y = view_offset_y / image_widget->zoom_level;
+    
+    double img_x = image_widget->view_center.x + img_offset_x;
+    double img_y = image_widget->view_center.y + img_offset_y;
+
+    return cvPoint2D64f(img_x, img_y);
 }
 
 

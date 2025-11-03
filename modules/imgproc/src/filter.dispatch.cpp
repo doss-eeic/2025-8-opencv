@@ -1530,10 +1530,17 @@ void filter2D(InputArray _src, OutputArray _dst, int ddepth,
     CV_OCL_RUN(_dst.isUMat() && _src.dims() <= 2,
                ocl_filter2D(_src, _dst, ddepth, _kernel, anchor0, delta, borderType))
 
+    /*問題箇所の特定 ここでそれぞれのコピーを作成しているため、
+    真のインプレース操作になっていない
+    →コピーを作成しているわけではないらしい。
+    ただ入力の配列をsrc,kernelとして解釈しているだけらしい
+    1と0の配列が与えられて、それが画像になるみたいな感じ*/
     Mat src = _src.getMat(), kernel = _kernel.getMat();
 
     if( ddepth < 0 )
         ddepth = src.depth();
+
+    /*怪しいと思ったが、ここでもないらしい*/
 
     _dst.create( src.size(), CV_MAKETYPE(ddepth, src.channels()) );
     Mat dst = _dst.getMat();

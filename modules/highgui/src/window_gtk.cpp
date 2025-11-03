@@ -53,6 +53,7 @@
 #include <gdk/gdkkeysyms.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <stdio.h>
+#include <algorithm>
 
 #if (GTK_MAJOR_VERSION == 2)
   #define GTK_VERSION2 1
@@ -103,6 +104,10 @@ struct _CvImageWidget {
     GtkWidget widget;
     CvMat * original_image;
     CvMat * scaled_image;
+    double zoom_level;
+    CvPoint2D64f view_center;
+    gboolean is_panning;       
+    CvPoint2D64f pan_start_view;
     int flags;
 };
 
@@ -147,7 +152,10 @@ void cvImageWidgetSetImage(CvImageWidget * widget, const CvArr *arr)
     if(widget->original_image && !CV_ARE_SIZES_EQ(mat, widget->original_image)){
         cvReleaseMat( &widget->original_image );
     }
-    if(!widget->original_image){
+    if(!widget->original_image){ //最初の画像読み込み
+        widget->zoom_level = 1.0;
+        widget->view_center = cvPoint2D64f(mat->cols / 2.0, mat->rows / 2.0);
+        widget->is_panning = FALSE;
         widget->original_image = cvCreateMat( mat->rows, mat->cols, CV_8UC3 );
         gtk_widget_queue_resize( GTK_WIDGET( widget ) );
     }
@@ -156,6 +164,8 @@ void cvImageWidgetSetImage(CvImageWidget * widget, const CvArr *arr)
     if(widget->scaled_image){
         cvResize( widget->original_image, widget->scaled_image, CV_INTER_AREA );
     }
+
+
 
     // window does not refresh without this
     gtk_widget_queue_draw( GTK_WIDGET(widget) );
@@ -170,6 +180,10 @@ cvImageWidgetNew (int flags)
   CV_Assert(image_widget && "GTK widget creation is failed. Ensure that there is no GTK2/GTK3 libraries conflict");
   image_widget->original_image = 0;
   image_widget->scaled_image = 0;
+  image_widget->zoom_level = 1.0;
+  image_widget->view_center = cvPoint2D64f(0.0, 0.0);
+  image_widget->is_panning = FALSE;
+  image_widget->pan_start_view = cvPoint2D64f(0, 0);
   image_widget->flags = flags | CV_WINDOW_NO_IMAGE;
 
   return GTK_WIDGET (image_widget);
@@ -583,6 +597,7 @@ struct CvWindow : CvUIBase
     GtkWidget* frame;
     GtkWidget* paned;
     std::string name;
+
 
     int last_key;
     int flags;
@@ -1023,7 +1038,57 @@ static gboolean cvImageWidget_draw(GtkWidget* widget, cairo_t *cr, gpointer data
   cairo_t *cr = gdk_cairo_create(widget->window);
 #endif
 
-  if( image_widget->scaled_image ){
+if (image_widget->zoom_level > 1.0 && image_widget->original_image)
+    {
+        cv::Mat original_mat = cv::cvarrToMat(image_widget->original_image);
+        if (!original_mat.empty())
+        {
+            int view_width = gtk_widget_get_allocated_width(widget);
+            int view_height = gtk_widget_get_allocated_height(widget);
+
+            // ROI計算
+            double roi_width_f = (double)view_width / image_widget->zoom_level;
+            double roi_height_f = (double)view_height / image_widget->zoom_level;
+            double roi_x_f = image_widget->view_center.x - roi_width_f / 2.0;
+            double roi_y_f = image_widget->view_center.y - roi_height_f / 2.0;
+            cv::Rect roi(cvRound(roi_x_f), cvRound(roi_y_f), cvRound(roi_width_f), cvRound(roi_height_f));
+            roi &= cv::Rect(0, 0, original_mat.cols, original_mat.rows);
+
+            if (roi.width > 0 && roi.height > 0)
+            {
+                cv::Mat mat_to_show;
+                cv::resize(original_mat(roi), mat_to_show, cv::Size(view_width, view_height), 0, 0, cv::INTER_NEAREST);
+
+                // Pixbufに変換
+                cv::Mat temp_rgb;
+                if (mat_to_show.channels() == 3) {
+                    // original_image は既にRGBなので、変換しない
+                    temp_rgb = mat_to_show;
+                }
+                else if (mat_to_show.channels() == 4) {
+                    // 4チャンネルの場合も、既にRGBAと仮定
+                    temp_rgb = mat_to_show;
+                }
+                else if (mat_to_show.channels() == 1) {
+                    // グレーだけはRGBに変換する必要がある
+                    cv::cvtColor(mat_to_show, temp_rgb, cv::COLOR_GRAY2RGB);
+                }
+                else {
+                    temp_rgb = mat_to_show.clone(); // 念のため
+                }
+
+                GBytes* bytes = g_bytes_new(temp_rgb.data, temp_rgb.total() * temp_rgb.elemSize());
+                pixbuf = gdk_pixbuf_new_from_bytes(bytes, GDK_COLORSPACE_RGB, false, 8, 
+                                                   temp_rgb.cols, temp_rgb.rows, (int)temp_rgb.step);
+                g_bytes_unref(bytes);
+
+                if (pixbuf)
+                    gdk_cairo_set_source_pixbuf(cr, pixbuf, 0, 0); // ズーム時は(0,0)から描画
+            }
+        }
+    }
+
+else if( image_widget->scaled_image ){
       // center image in available region
       int x0 = (gtk_widget_get_allocated_width(widget) - image_widget->scaled_image->cols)/2;
       int y0 = (gtk_widget_get_allocated_height(widget) - image_widget->scaled_image->rows)/2;
@@ -1902,6 +1967,148 @@ static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_da
     // TODO move this logic to CvImageWidget
     // TODO add try-catch wrappers into all callbacks
     CvWindow* window = (CvWindow*)user_data;
+    CvImageWidget * image_widget = CV_IMAGE_WIDGET( widget );
+
+    if( event->type == GDK_SCROLL )
+    {
+        GdkEventScroll* event_scroll = (GdkEventScroll*)event;
+        if (image_widget->original_image)
+        {
+            double zoom_factor = 1.1;
+            double old_zoom = image_widget->zoom_level;
+
+            if (event_scroll->delta_y < 0) // 上スクロール (delta_yがマイナス)
+            {
+                image_widget->zoom_level *= zoom_factor;
+            }
+            else if (event_scroll->delta_y > 0) // 下スクロール (delta_yがプラス)
+            {
+                image_widget->zoom_level /= zoom_factor;
+            }
+            
+            if (image_widget->zoom_level < 1.0) image_widget->zoom_level = 1.0;
+            if (image_widget->zoom_level > 30.0) image_widget->zoom_level = 30.0;
+
+            GtkAllocation allocation;
+            gtk_widget_get_allocation(GTK_WIDGET(image_widget), &allocation);
+            double view_width = allocation.width;
+            double view_height = allocation.height;
+
+            double mouse_x = event_scroll->x;
+            double mouse_y = event_scroll->y;
+            double img_x = image_widget->view_center.x + (mouse_x - view_width / 2.0) / old_zoom;
+            double img_y = image_widget->view_center.y + (mouse_y - view_height / 2.0) / old_zoom;
+
+            //ズーム後の理想の中心座標
+            double desired_center_x = img_x - (mouse_x - view_width / 2.0) / image_widget->zoom_level;
+            double desired_center_y = img_y - (mouse_y - view_height / 2.0) / image_widget->zoom_level;
+            
+            // 中心座標の有効範囲 
+            cv::Mat original_mat = cv::cvarrToMat(image_widget->original_image);
+            double img_cols = original_mat.cols;
+            double img_rows = original_mat.rows;
+
+
+            double new_roi_half_width = (view_width / image_widget->zoom_level) / 2.0;
+            double new_roi_half_height = (view_height / image_widget->zoom_level) / 2.0;
+
+            // 中心座標が取りうる範囲
+            double min_center_x = new_roi_half_width;
+            double max_center_x = img_cols - new_roi_half_width;
+            double min_center_y = new_roi_half_height;
+            double max_center_y = img_rows - new_roi_half_height;
+            
+            // 理想の中心座標を有効範囲内に補正
+            image_widget->view_center.x = std::max(min_center_x, std::min(max_center_x, desired_center_x));
+            image_widget->view_center.y = std::max(min_center_y, std::min(max_center_y, desired_center_y));
+            
+            // 画像がビューより小さい場合中心がズレないように固定
+            if (img_cols < view_width / image_widget->zoom_level) {
+                image_widget->view_center.x = img_cols / 2.0;
+            }
+            if (img_rows < view_height / image_widget->zoom_level) {
+                image_widget->view_center.y = img_rows / 2.0;
+            }
+            gtk_widget_queue_draw(GTK_WIDGET(image_widget));
+        }
+
+    }
+
+// 1. マウスボタンを押した時 (パン開始)
+    else if( event->type == GDK_BUTTON_PRESS )
+    {
+        GdkEventButton* event_button = (GdkEventButton*)event;
+        // 左クリック(button 1)で、かつズーム中のみ
+        if (event_button->button == 1 && image_widget->zoom_level > 1.0)
+        {
+            image_widget->is_panning = TRUE;
+            // ドラッグ開始座標を記録
+            image_widget->pan_start_view.x = event_button->x;
+            image_widget->pan_start_view.y = event_button->y;
+            
+        }
+    }
+    
+    // 2. マウスをドラッグした時 (パン実行)
+    else if( event->type == GDK_MOTION_NOTIFY )
+    {
+        GdkEventMotion* event_motion = (GdkEventMotion*)event;
+        if (image_widget->is_panning) // パン状態の時だけ実行
+        {
+            // 現在のマウス座標
+            CvPoint2D64f current_view = cvPoint2D64f(event_motion->x, event_motion->y);
+
+            // ウィジェット上での移動量
+            double view_delta_x = current_view.x - image_widget->pan_start_view.x;
+            double view_delta_y = current_view.y - image_widget->pan_start_view.y;
+
+            // 画像上での移動量 (ズームレベルで割る)
+            double img_delta_x = view_delta_x / image_widget->zoom_level;
+            double img_delta_y = view_delta_y / image_widget->zoom_level;
+
+            // 理想の中心座標 (マウスの移動とは *逆方向* に中心をずらす)
+            double desired_center_x = image_widget->view_center.x - img_delta_x;
+            double desired_center_y = image_widget->view_center.y - img_delta_y;
+
+            // クランプ処理
+            cv::Mat original_mat = cv::cvarrToMat(image_widget->original_image);
+            GtkAllocation allocation;
+            gtk_widget_get_allocation(GTK_WIDGET(image_widget), &allocation);
+            double view_width = allocation.width;
+            double view_height = allocation.height;
+            double img_cols = original_mat.cols;
+            double img_rows = original_mat.rows;
+
+            double new_roi_half_width = (view_width / image_widget->zoom_level) / 2.0;
+            double new_roi_half_height = (view_height / image_widget->zoom_level) / 2.0;
+
+            double min_center_x = new_roi_half_width;
+            double max_center_x = img_cols - new_roi_half_width;
+            double min_center_y = new_roi_half_height;
+            double max_center_y = img_rows - new_roi_half_height;
+
+            image_widget->view_center.x = std::max(min_center_x, std::min(max_center_x, desired_center_x));
+            image_widget->view_center.y = std::max(min_center_y, std::min(max_center_y, desired_center_y));
+
+
+            // ドラッグ開始座標を今の座標に更新する
+            image_widget->pan_start_view = current_view;
+
+            gtk_widget_queue_draw(GTK_WIDGET(image_widget));
+        }
+    }
+
+    // 3. マウスボタンを離した時 (パン終了)
+    else if( event->type == GDK_BUTTON_RELEASE )
+    {
+        GdkEventButton* event_button = (GdkEventButton*)event;
+        if (event_button->button == 1 && image_widget->is_panning)
+        {
+            image_widget->is_panning = FALSE;
+
+        }
+    }
+
     if (!window || !widget ||
         window->signature != CV_WINDOW_MAGIC_VAL ||
         window->widget != widget ||
@@ -1911,7 +2118,7 @@ static gboolean icvOnMouse( GtkWidget *widget, GdkEvent *event, gpointer user_da
     CvPoint2D32f pt32f = {-1., -1.};
     CvPoint pt = {-1,-1};
     int cv_event = -1, state = 0, flags = 0;
-    CvImageWidget * image_widget = CV_IMAGE_WIDGET( widget );
+
 
     if( event->type == GDK_MOTION_NOTIFY )
     {

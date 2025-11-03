@@ -47,6 +47,18 @@
 
 // in later times, use this file as a dispatcher to implementations like cvcap.cpp
 
+// ズーム可能ウィンドウの状態を管理する構造体
+struct ZoomableWindowState
+{
+    cv::String winname;
+    cv::Mat original_image;
+    cv::Rect current_roi;
+    bool is_selecting;      
+    cv::Point selection_start;  
+};
+
+// ウィンドウ名をキーとして、各ウィンドウの状態を保持する静的マップ
+static std::map<cv::String, ZoomableWindowState> g_zoomable_windows;
 
 using namespace cv;
 using namespace cv::highgui_backend;

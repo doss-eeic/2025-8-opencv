@@ -1530,31 +1530,169 @@ void filter2D(InputArray _src, OutputArray _dst, int ddepth,
     CV_OCL_RUN(_dst.isUMat() && _src.dims() <= 2,
                ocl_filter2D(_src, _dst, ddepth, _kernel, anchor0, delta, borderType))
 
-    /*問題箇所の特定 ここでそれぞれのコピーを作成しているため、
-    真のインプレース操作になっていない
-    →コピーを作成しているわけではないらしい。
-    ただ入力の配列をsrc,kernelとして解釈しているだけらしい
-    1と0の配列が与えられて、それが画像になるみたいな感じ*/
     Mat src = _src.getMat(), kernel = _kernel.getMat();
 
-    if( ddepth < 0 )
+    if (ddepth < 0)
         ddepth = src.depth();
 
-    /*怪しいと思ったが、ここでもないらしい*/
+    // インプレース要求かつsrc, dstが同じ場合のみインプレース
+    bool do_inplace = (_src.kind() == _InputArray::MAT && _dst.kind() == _OutputArray::MAT &&
+                       src.data == _dst.getMatRef().data);
 
-    _dst.create( src.size(), CV_MAKETYPE(ddepth, src.channels()) );
+    // 意図的にインプレースの操作を実現しようとしているため、安全性の問題などは考慮しなくてよい(ただの実験的機能)
+    if (do_inplace) {
+        Point anchor = normalizeAnchor(anchor0, kernel.size());
+        const int rows = src.rows, cols = src.cols, ch = src.channels();
+        const int krows = kernel.rows, kcols = kernel.cols;
+        CV_Assert(src.depth() == CV_8U && kernel.depth() == CV_32F); // サンプル実装: 8U入力, 32Fカーネルのみ
+
+        // 事前ポインタ配列やカーネル行ポインタを作ってループ内のコストを削減
+        std::vector<uchar*> row_ptrs(rows);
+        for (int y = 0; y < rows; ++y)
+            row_ptrs[y] = src.ptr<uchar>(y);
+
+        std::vector<const float*> krow_ptrs(krows);
+        for (int ky = 0; ky < krows; ++ky)
+            krow_ptrs[ky] = kernel.ptr<float>(ky);
+
+        #pragma omp parallel for schedule(static)
+        for (int y = 0; y < rows; ++y) {
+            uchar* outptr = row_ptrs[y];
+            for (int x = 0; x < cols; ++x) {
+                // 各チャネル毎に処理を高速化（チャネル数毎に分岐）
+                if (ch == 1) {
+                    float sum = 0.f, weight_sum = 0.f;
+                    for (int ky = 0; ky < krows; ++ky) {
+                        int sy = y + ky - anchor.y;
+                        if (sy < 0 || sy >= rows) continue;
+                        const uchar* sptr = row_ptrs[sy];
+                        const float* kptr = krow_ptrs[ky];
+
+                        int sx0 = x - anchor.x;
+                        int kx_start = std::max(0, -sx0);
+                        int kx_end = std::min(kcols, cols - sx0);
+                        const uchar* pix = sptr + (sx0 + kx_start);
+
+                        for (int kx = kx_start; kx < kx_end; ++kx, ++pix) {
+                            float k = kptr[kx];
+                            sum += (*pix) * k;
+                            weight_sum += k;
+                        }
+                    }
+                    float out = (weight_sum != 0.f) ? (sum / weight_sum) : 0.f;
+                    outptr[x] = saturate_cast<uchar>(out + (float)delta);
+                }
+                else if (ch == 3) {
+                    float s0 = 0.f, s1 = 0.f, s2 = 0.f;
+                    float wsum = 0.f;
+                    for (int ky = 0; ky < krows; ++ky) {
+                        int sy = y + ky - anchor.y;
+                        if (sy < 0 || sy >= rows) continue;
+                        const uchar* sptr = row_ptrs[sy];
+                        const float* kptr = krow_ptrs[ky];
+
+                        int sx0 = x - anchor.x;
+                        int kx_start = std::max(0, -sx0);
+                        int kx_end = std::min(kcols, cols - sx0);
+                        const uchar* pix = sptr + (sx0 + kx_start) * 3;
+                        for (int kx = kx_start; kx < kx_end; ++kx, pix += 3) {
+                            float k = kptr[kx];
+                            s0 += pix[0] * k;
+                            s1 += pix[1] * k;
+                            s2 += pix[2] * k;
+                            wsum += k;
+                        }
+                    }
+                    if (wsum != 0.f) {
+                        outptr[x*3 + 0] = saturate_cast<uchar>(s0 / wsum + (float)delta);
+                        outptr[x*3 + 1] = saturate_cast<uchar>(s1 / wsum + (float)delta);
+                        outptr[x*3 + 2] = saturate_cast<uchar>(s2 / wsum + (float)delta);
+                    } else {
+                        uchar val = saturate_cast<uchar>(delta);
+                        outptr[x*3 + 0] = val;
+                        outptr[x*3 + 1] = val;
+                        outptr[x*3 + 2] = val;
+                    }
+                }
+                else if (ch == 4) {
+                    float s0 = 0.f, s1 = 0.f, s2 = 0.f, s3 = 0.f;
+                    float wsum = 0.f;
+                    for (int ky = 0; ky < krows; ++ky) {
+                        int sy = y + ky - anchor.y;
+                        if (sy < 0 || sy >= rows) continue;
+                        const uchar* sptr = row_ptrs[sy];
+                        const float* kptr = krow_ptrs[ky];
+
+                        int sx0 = x - anchor.x;
+                        int kx_start = std::max(0, -sx0);
+                        int kx_end = std::min(kcols, cols - sx0);
+                        const uchar* pix = sptr + (sx0 + kx_start) * 4;
+                        for (int kx = kx_start; kx < kx_end; ++kx, pix += 4) {
+                            float k = kptr[kx];
+                            s0 += pix[0] * k;
+                            s1 += pix[1] * k;
+                            s2 += pix[2] * k;
+                            s3 += pix[3] * k;
+                            wsum += k;
+                        }
+                    }
+                    if (wsum != 0.f) {
+                        outptr[x*4 + 0] = saturate_cast<uchar>(s0 / wsum + (float)delta);
+                        outptr[x*4 + 1] = saturate_cast<uchar>(s1 / wsum + (float)delta);
+                        outptr[x*4 + 2] = saturate_cast<uchar>(s2 / wsum + (float)delta);
+                        outptr[x*4 + 3] = saturate_cast<uchar>(s3 / wsum + (float)delta);
+                    } else {
+                        uchar val = saturate_cast<uchar>(delta);
+                        outptr[x*4 + 0] = val;
+                        outptr[x*4 + 1] = val;
+                        outptr[x*4 + 2] = val;
+                        outptr[x*4 + 3] = val;
+                    }
+                }
+                else {
+                    // 汎用チャネル数処理（同様にアドレス計算を減らす）
+                    for (int c = 0; c < ch; ++c) {
+                        float sum = 0.f, weight_sum = 0.f;
+                        for (int ky = 0; ky < krows; ++ky) {
+                            int sy = y + ky - anchor.y;
+                            if (sy < 0 || sy >= rows) continue;
+                            const uchar* sptr = row_ptrs[sy];
+                            const float* kptr = krow_ptrs[ky];
+
+                            int sx0 = x - anchor.x;
+                            int kx_start = std::max(0, -sx0);
+                            int kx_end = std::min(kcols, cols - sx0);
+                            const uchar* pix = sptr + (sx0 + kx_start) * ch + c;
+                            for (int kx = kx_start; kx < kx_end; ++kx, pix += ch) {
+                                float k = kptr[kx];
+                                sum += (*pix) * k;
+                                weight_sum += k;
+                            }
+                        }
+                        float out = (weight_sum != 0.f) ? (sum / weight_sum) : 0.f;
+                        outptr[x * ch + c] = saturate_cast<uchar>(out + (float)delta);
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    // 通常通り出力先を作成
+    _dst.create(src.size(), CV_MAKETYPE(ddepth, src.channels()));
     Mat dst = _dst.getMat();
+
     Point anchor = normalizeAnchor(anchor0, kernel.size());
 
     Point ofs;
     Size wsz(src.cols, src.rows);
-    if( (borderType & BORDER_ISOLATED) == 0 )
-        src.locateROI( wsz, ofs );
+    if ((borderType & BORDER_ISOLATED) == 0)
+        src.locateROI(wsz, ofs);
 
     hal::filter2D(src.type(), dst.type(), kernel.type(),
                   src.data, src.step, dst.data, dst.step,
                   dst.cols, dst.rows, wsz.width, wsz.height, ofs.x, ofs.y,
-                  kernel.data, kernel.step,  kernel.cols, kernel.rows,
+                  kernel.data, kernel.step, kernel.cols, kernel.rows,
                   anchor.x, anchor.y,
                   delta, borderType, src.isSubmatrix());
 }

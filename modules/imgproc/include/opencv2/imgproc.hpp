@@ -1716,7 +1716,7 @@ is at the kernel center.
  */
 CV_EXPORTS_W void filter2D( InputArray src, OutputArray dst, int ddepth,
                             InputArray kernel, Point anchor = Point(-1,-1),
-                            double delta = 0, int borderType = BORDER_DEFAULT );
+                            double delta = 0, int borderType = BORDER_DEFAULT);
 
 /** @brief Applies a separable linear filter to an image.
 
